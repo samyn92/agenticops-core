@@ -136,6 +136,8 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 // reconcileDaemon handles daemon mode: PVC -> ConfigMaps -> Deployment -> Service -> NetworkPolicy -> status.
+//
+//nolint:unparam // Result is always nil for now but will be used for requeue logic.
 func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1alpha1.Agent, mcpServers []agentsv1alpha1.MCPServer) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -242,6 +244,8 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 }
 
 // reconcileTask handles task mode: ConfigMaps -> status (Ready).
+//
+//nolint:unparam // Result is always nil for now but will be used for requeue logic.
 func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alpha1.Agent) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 

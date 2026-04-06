@@ -92,6 +92,8 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 // reconcileDeployMode creates Deployment + Service + ConfigMap for an MCP server.
+//
+//nolint:unparam // Result is always nil for now but will be used for requeue logic.
 func (r *MCPServerReconciler) reconcileDeployMode(ctx context.Context, mcp *agentsv1alpha1.MCPServer) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -142,6 +144,8 @@ func (r *MCPServerReconciler) reconcileDeployMode(ctx context.Context, mcp *agen
 }
 
 // reconcileExternalMode validates and probes an external MCP server.
+//
+//nolint:unparam // error is always nil for now; health check failures set status, not error.
 func (r *MCPServerReconciler) reconcileExternalMode(ctx context.Context, mcp *agentsv1alpha1.MCPServer) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 

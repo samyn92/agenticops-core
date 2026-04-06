@@ -398,7 +398,12 @@ func (r *AgentRunReconciler) pollDaemonRunStatus(ctx context.Context, run *agent
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
 
-	resp, err := httpClient.Get(statusURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, statusURL, nil)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: requeueInterval}, nil
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		// Agent might be temporarily unavailable
 		return ctrl.Result{RequeueAfter: requeueInterval}, nil
