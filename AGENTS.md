@@ -57,3 +57,20 @@ kubectl config use-context k3s
 |-----------|---------|
 | `agent-system` | Dev pod, operator, console |
 | `agents` | Agent workloads (created when deploying CRs) |
+
+### Images
+
+| Image | Source | Purpose |
+|-------|--------|---------|
+| `ghcr.io/samyn92/agenticops-operator` | `Dockerfile` (repo root) | Kubernetes operator |
+| `ghcr.io/samyn92/agent-runtime` | `images/agent-runtime/` | Pi SDK agent runtime |
+| `ghcr.io/samyn92/mcp-gateway` | `images/mcp-gateway/` | MCP protocol gateway (spawn + proxy modes) |
+
+### Related Repos
+
+| Repo | Purpose |
+|------|---------|
+| `agent-channels` | Channel bridge images (gitlab, webhook, etc.) |
+| `agent-tools` | OCI tool/agent packaging CLI + tool packages |
+| `agent-console` | Web console |
+| `agent-factory` | Helm chart (future) |
