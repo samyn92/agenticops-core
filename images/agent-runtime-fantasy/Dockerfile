@@ -1,7 +1,7 @@
 # Fantasy Agent Runtime — Go binary with Charm Fantasy SDK
 # Two modes: daemon (HTTP server) and task (one-shot)
 
-FROM golang:1.24 AS builder
+FROM golang:1.26 AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download

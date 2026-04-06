@@ -40,3 +40,4 @@ Thumbs.db
 # Env files (never commit secrets)
 .env
 .env.*
+images/agent-runtime-fantasy/agent-runtime
