@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agenticops-dev
+  namespace: agent-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agenticops-dev
+rules:
+  # CRDs - manage our own CRDs
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Our CRD resources (agents.agenticops.io)
+  - apiGroups: ["agents.agenticops.io"]
+    resources: ["*"]
+    verbs: ["*"]
+  # Core resources the operator manages
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "persistentvolumeclaims", "secrets", "pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Jobs (task agents)
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Networking (ingress, netpol)
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Namespaces (read)
+  - apiGroups: [""]
+    resources: ["namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  # Leader election
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Webhooks
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations", "mutatingwebhookconfigurations"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agenticops-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agenticops-dev
+subjects:
+  - kind: ServiceAccount
+    name: agenticops-dev
+    namespace: agent-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agenticops-dev
+  namespace: agent-system
+  labels:
+    app: agenticops-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agenticops-dev
+  template:
+    metadata:
+      labels:
+        app: agenticops-dev
+    spec:
+      serviceAccountName: agenticops-dev
+      containers:
+        - name: dev
+          image: golang:1.25
+          command: ["/bin/bash", "/workspace/hack/dev/init.sh"]
+          workingDir: /workspace
+          env:
+            - name: GOPATH
+              value: /go
+            - name: GOCACHE
+              value: /go/cache
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: go-cache
+              mountPath: /go
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 500m
+            limits:
+              memory: 2Gi
+      volumes:
+        - name: workspace
+          hostPath:
+            path: /home/samy/dev/github.com/samyn92/agenticops-core
+            type: Directory
+        - name: go-cache
+          emptyDir:
+            sizeLimit: 2Gi
