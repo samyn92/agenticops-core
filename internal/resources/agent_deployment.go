@@ -230,6 +230,20 @@ func buildVolumes(agent *agentsv1alpha1.Agent, taskMode bool) []corev1.Volume {
 		})
 	}
 
+	// Pull secret volumes for OCI tools that need auth
+	for _, tr := range agent.Spec.ToolRefs {
+		if tr.OCIRef != nil && tr.OCIRef.PullSecret != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: fmt.Sprintf("pull-secret-init-pull-tool-%s", tr.Name),
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: tr.OCIRef.PullSecret.Name,
+					},
+				},
+			})
+		}
+	}
+
 	return volumes
 }
 
@@ -293,16 +307,22 @@ func buildCraneInitContainer(name, ref, destPath, volumeName, mountPath string, 
 		},
 	}
 
-	// If a pull secret is specified, mount it for crane auth
+	// If a pull secret is specified, mount it as DOCKER_CONFIG directory.
+	// crane expects DOCKER_CONFIG to point to a directory containing config.json.
 	if pullSecret != nil {
+		configDir := "/tmp/docker-config"
+		// Write the dockerconfigjson to config.json and point crane at the dir
+		cmd = fmt.Sprintf("mkdir -p %s && cp /tmp/pull-secret/%s %s/config.json && %s",
+			configDir, pullSecret.Key, configDir, cmd)
+		c.Command = []string{"sh", "-c", cmd}
 		c.Env = append(c.Env, corev1.EnvVar{
-			Name: "DOCKER_CONFIG",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: pullSecret.Name},
-					Key:                  pullSecret.Key,
-				},
-			},
+			Name:  "DOCKER_CONFIG",
+			Value: configDir,
+		})
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+			Name:      fmt.Sprintf("pull-secret-%s", name),
+			MountPath: "/tmp/pull-secret",
+			ReadOnly:  true,
 		})
 	}
 
