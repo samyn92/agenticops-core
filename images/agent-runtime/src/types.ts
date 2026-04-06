@@ -8,12 +8,14 @@ export interface OperatorConfig {
   compaction?: CompactionEntry;
   providers: ProviderEntry[];
   primaryModel: string;
-  fallbackModels?: string[];
+  primaryProvider: string;
+  fallbackModels?: FallbackModelEntry[];
   toolHooks?: ToolHooksEntry;
   skills?: SkillEntry[];
   systemPrompt?: string;
   contextFiles?: ContextEntry[];
   builtinTools?: string[];
+  thinkingLevel?: string;
 }
 
 export interface ToolEntry {
@@ -34,6 +36,11 @@ export interface CompactionEntry {
 
 export interface ProviderEntry {
   name: string;
+}
+
+export interface FallbackModelEntry {
+  provider: string;
+  model: string;
 }
 
 export interface ToolHooksEntry {
