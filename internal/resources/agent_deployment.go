@@ -126,13 +126,9 @@ func buildVolumes(agent *agentsv1alpha1.Agent, taskMode bool) []corev1.Volume {
 		},
 	}
 
-	// Data volume: PVC for daemon, emptyDir for task
-	if taskMode {
-		volumes = append(volumes, corev1.Volume{
-			Name:         VolumeData,
-			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-		})
-	} else if agent.Spec.Storage != nil {
+	// Data volume: PVC for daemon with storage, emptyDir otherwise.
+	// Always provide a data volume since the runtime expects /data to exist.
+	if !taskMode && agent.Spec.Storage != nil {
 		volumes = append(volumes, corev1.Volume{
 			Name: VolumeData,
 			VolumeSource: corev1.VolumeSource{
@@ -140,6 +136,11 @@ func buildVolumes(agent *agentsv1alpha1.Agent, taskMode bool) []corev1.Volume {
 					ClaimName: ObjectName(agent.Name, "storage"),
 				},
 			},
+		})
+	} else {
+		volumes = append(volumes, corev1.Volume{
+			Name:         VolumeData,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 		})
 	}
 
@@ -350,12 +351,13 @@ func buildMainContainer(agent *agentsv1alpha1.Agent, taskMode bool) corev1.Conta
 	// Environment variables
 	env := buildEnvVars(agent)
 
-	// Build command based on mode
+	// Build command based on mode.
+	// The runtime image uses tsx to run TypeScript directly.
 	var command []string
 	if taskMode {
-		command = []string{"node", "/app/agent-task.js"}
+		command = []string{"npx", "tsx", "/app/src/agent-task.ts"}
 	} else {
-		command = []string{"node", "/app/agent-server.js"}
+		command = []string{"npx", "tsx", "/app/src/agent-server.ts"}
 	}
 
 	// Build args: builtinTools

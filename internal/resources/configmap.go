@@ -28,17 +28,25 @@ import (
 
 // OperatorExtensionConfig is the JSON structure mounted at /etc/operator/config.json.
 type OperatorExtensionConfig struct {
-	Tools          []ToolEntry      `json:"tools"`
-	MCPServers     []MCPEntry       `json:"mcpServers,omitempty"`
-	Compaction     *CompactionEntry `json:"compaction,omitempty"`
-	Providers      []ProviderEntry  `json:"providers"`
-	PrimaryModel   string           `json:"primaryModel"`
-	FallbackModels []string         `json:"fallbackModels,omitempty"`
-	ToolHooks      *ToolHooksEntry  `json:"toolHooks,omitempty"`
-	Skills         []SkillEntry     `json:"skills,omitempty"`
-	SystemPrompt   string           `json:"systemPrompt,omitempty"`
-	ContextFiles   []ContextEntry   `json:"contextFiles,omitempty"`
-	BuiltinTools   []string         `json:"builtinTools,omitempty"`
+	Tools           []ToolEntry      `json:"tools"`
+	MCPServers      []MCPEntry       `json:"mcpServers,omitempty"`
+	Compaction      *CompactionEntry `json:"compaction,omitempty"`
+	Providers       []ProviderEntry  `json:"providers"`
+	PrimaryProvider string           `json:"primaryProvider"`
+	PrimaryModel    string           `json:"primaryModel"`
+	ThinkingLevel   string           `json:"thinkingLevel,omitempty"`
+	FallbackModels  []FallbackEntry  `json:"fallbackModels,omitempty"`
+	ToolHooks       *ToolHooksEntry  `json:"toolHooks,omitempty"`
+	Skills          []SkillEntry     `json:"skills,omitempty"`
+	SystemPrompt    string           `json:"systemPrompt,omitempty"`
+	ContextFiles    []ContextEntry   `json:"contextFiles,omitempty"`
+	BuiltinTools    []string         `json:"builtinTools,omitempty"`
+}
+
+// FallbackEntry describes a fallback model with provider and model ID.
+type FallbackEntry struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
 }
 
 // ToolEntry describes a tool package path.
@@ -105,10 +113,17 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent) (*corev1.ConfigMap, error)
 }
 
 func buildExtensionConfig(agent *agentsv1alpha1.Agent) OperatorExtensionConfig {
+	// Split "provider/model" format
+	primaryProvider, primaryModel := splitModelString(agent.Spec.Model)
+
 	config := OperatorExtensionConfig{
-		PrimaryModel: agent.Spec.Model,
-		SystemPrompt: agent.Spec.SystemPrompt,
-		BuiltinTools: agent.Spec.BuiltinTools,
+		Tools:           []ToolEntry{},     // never nil — runtime iterates this
+		Providers:       []ProviderEntry{}, // never nil — runtime iterates this
+		PrimaryProvider: primaryProvider,
+		PrimaryModel:    primaryModel,
+		ThinkingLevel:   string(agent.Spec.ThinkingLevel),
+		SystemPrompt:    agent.Spec.SystemPrompt,
+		BuiltinTools:    agent.Spec.BuiltinTools,
 	}
 
 	// Tools
@@ -128,8 +143,14 @@ func buildExtensionConfig(agent *agentsv1alpha1.Agent) OperatorExtensionConfig {
 		config.Providers = append(config.Providers, ProviderEntry{Name: p.Name})
 	}
 
-	// Fallback models
-	config.FallbackModels = agent.Spec.FallbackModels
+	// Fallback models (split "provider/model" format)
+	for _, fm := range agent.Spec.FallbackModels {
+		provider, model := splitModelString(fm)
+		config.FallbackModels = append(config.FallbackModels, FallbackEntry{
+			Provider: provider,
+			Model:    model,
+		})
+	}
 
 	// Compaction (daemon only)
 	if agent.Spec.Compaction != nil {
@@ -278,4 +299,13 @@ func BuildMCPServerConfigMap(mcp *agentsv1alpha1.MCPServer) *corev1.ConfigMap {
 // e.g. "anthropic" -> "ANTHROPIC_API_KEY"
 func ProviderEnvVarName(providerName string) string {
 	return fmt.Sprintf("%s_API_KEY", strings.ToUpper(providerName))
+}
+
+// splitModelString splits a "provider/model" string into (provider, model).
+// If there's no slash, provider defaults to "" and model is the full string.
+func splitModelString(s string) (string, string) {
+	if idx := strings.Index(s, "/"); idx >= 0 {
+		return s[:idx], s[idx+1:]
+	}
+	return "", s
 }

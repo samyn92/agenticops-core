@@ -29,7 +29,7 @@ export async function loadOperatorExtension(
   const k8sClient = new K8sClient();
 
   // 1. Load tools from /tools/ directories
-  for (const tool of config.tools) {
+  for (const tool of config.tools ?? []) {
     try {
       const indexPath = `${tool.path}/index.js`;
       if (existsSync(indexPath)) {
