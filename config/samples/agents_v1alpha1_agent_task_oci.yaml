@@ -1,0 +1,112 @@
+# Task mode: OCI/configmap/inline tools, skills, extensions, context, and scheduling
+apiVersion: agents.agenticops.io/v1alpha1
+kind: Agent
+metadata:
+  name: scheduled-oci-agent
+  labels:
+    app.kubernetes.io/name: agenticops-core
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  mode: task
+  model: openai/gpt-4.1-mini
+
+  providers:
+    - name: openai
+      apiKeySecret:
+        name: llm-api-keys
+        key: OPENAI_API_KEY
+
+  systemPrompt: |
+    You triage issues, propose next actions, and keep outputs concise.
+
+  contextFiles:
+    - configMapRef:
+        name: agent-context
+        key: AGENTS.md
+
+  toolRefs:
+    - name: jira_tools
+      ociRef:
+        ref: ghcr.io/samyn92/pi-tools-jira:0.1.0
+        pullPolicy: IfNotPresent
+    - name: repo_helpers
+      configMapRef:
+        name: agent-tool-bundles
+        key: repo-helpers.js
+    - name: inline_helper
+      content: |
+        export default function({ tool }) {
+          tool({
+            name: "echo_helper",
+            description: "Echo a value for testing",
+            parameters: {
+              type: "object",
+              properties: {
+                value: { type: "string" }
+              },
+              required: ["value"]
+            },
+            execute: async ({ value }) => ({ value })
+          });
+        }
+
+  env:
+    WORKSPACE_ROOT: /workspace
+    FEATURE_FLAGS: issue-triage
+
+  secrets:
+    - name: GITHUB_TOKEN
+      secretRef:
+        name: scm-credentials
+        key: github-token
+
+  skills:
+    - name: incident-playbook
+      ociRef:
+        ref: ghcr.io/samyn92/pi-skill-incident-playbook:0.1.0
+    - name: review-style-guide
+      configMapRef:
+        name: agent-skills
+        key: review-style-guide.md
+    - name: escalation-template
+      content: |
+        # Escalation template
+        - Summary
+        - Impact
+        - Next steps
+
+  extensions:
+    - name: jira-extension
+      ociRef:
+        ref: ghcr.io/samyn92/pi-ext-jira:0.1.0
+      env:
+        JIRA_BASE_URL: https://jira.example.com
+      secrets:
+        - name: JIRA_TOKEN
+          secretRef:
+            name: jira-credentials
+            key: token
+
+  schedule: "0 * * * *"
+  schedulePrompt: |
+    Check newly opened incidents and propose next actions.
+
+  toolHooks:
+    auditTools:
+      - jira_tools
+      - inline_helper
+
+  networkPolicy:
+    enabled: true
+
+  image: ghcr.io/samyn92/agent-runtime:latest
+  imagePullPolicy: IfNotPresent
+
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+
+  timeout: "10m"

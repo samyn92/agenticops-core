@@ -1,0 +1,22 @@
+# Telegram chat channel example
+apiVersion: agents.agenticops.io/v1alpha1
+kind: Channel
+metadata:
+  name: telegram-chat
+  labels:
+    app.kubernetes.io/name: agenticops-core
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  type: telegram
+  agentRef: code-review-agent
+
+  telegram:
+    botTokenSecret:
+      name: telegram-bot-secret
+      key: BOT_TOKEN
+    allowedUsers:
+      - "123456789"
+    allowedChats:
+      - "-1001234567890"
+
+  image: ghcr.io/samyn92/channel-telegram:latest

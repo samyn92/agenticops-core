@@ -9,6 +9,9 @@ metadata:
 spec:
   image: ghcr.io/samyn92/mcp-gitlab:latest
   port: 8080
+  command:
+    - node
+    - /app/server.js
 
   env:
     GITLAB_URL: "https://gitlab.com"
@@ -23,35 +26,11 @@ spec:
     path: /health
     intervalSeconds: 30
 
+  serviceAccountName: mcp-server-sa
+
   resources:
     requests:
       memory: 128Mi
       cpu: 100m
     limits:
       memory: 256Mi
----
-# External mode: reference an existing MCP server
-apiVersion: agents.agenticops.io/v1alpha1
-kind: MCPServer
-metadata:
-  name: external-k8s-mcp
-  labels:
-    app.kubernetes.io/name: agenticops-core
-    app.kubernetes.io/managed-by: kustomize
-spec:
-  url: https://mcp.kubernetes.internal:8443
-
-  headers:
-    X-Custom-Header: "my-value"
-
-  oauth:
-    clientIdSecret:
-      name: k8s-mcp-oauth
-      key: client-id
-    clientSecretSecret:
-      name: k8s-mcp-oauth
-      key: client-secret
-
-  healthCheck:
-    url: https://mcp.kubernetes.internal:8443/health
-    intervalSeconds: 60

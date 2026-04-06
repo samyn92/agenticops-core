@@ -1,0 +1,25 @@
+# External mode: reference an existing MCP server
+apiVersion: agents.agenticops.io/v1alpha1
+kind: MCPServer
+metadata:
+  name: external-k8s-mcp
+  labels:
+    app.kubernetes.io/name: agenticops-core
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  url: https://mcp.kubernetes.internal:8443
+
+  headers:
+    X-Custom-Header: "my-value"
+
+  oauth:
+    clientIdSecret:
+      name: k8s-mcp-oauth
+      key: client-id
+    clientSecretSecret:
+      name: k8s-mcp-oauth
+      key: client-secret
+
+  healthCheck:
+    url: https://mcp.kubernetes.internal:8443/health
+    intervalSeconds: 60

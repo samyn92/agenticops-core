@@ -1,7 +1,14 @@
 ## Append samples of your project ##
 resources:
 - agents_v1alpha1_agent.yaml
+- agents_v1alpha1_agent_task_oci.yaml
 - agents_v1alpha1_channel.yaml
+- agents_v1alpha1_channel_telegram.yaml
+- agents_v1alpha1_channel_slack.yaml
+- agents_v1alpha1_channel_discord.yaml
+- agents_v1alpha1_channel_github.yaml
+- agents_v1alpha1_channel_webhook.yaml
 - agents_v1alpha1_agentrun.yaml
 - agents_v1alpha1_mcpserver.yaml
+- agents_v1alpha1_mcpserver_external.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

@@ -1,0 +1,26 @@
+# Generic webhook channel example
+apiVersion: agents.agenticops.io/v1alpha1
+kind: Channel
+metadata:
+  name: generic-webhook-channel
+  labels:
+    app.kubernetes.io/name: agenticops-core
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  type: webhook
+  agentRef: code-review-agent
+
+  webhookConfig:
+    secret:
+      name: generic-webhook-secret
+      key: token
+
+  prompt: |
+    Process the incoming webhook payload and summarize required follow-up.
+
+  webhook:
+    host: webhooks.agenticops.example.com
+    path: /generic/events
+    ingressClassName: nginx
+
+  image: ghcr.io/samyn92/channel-webhook:latest

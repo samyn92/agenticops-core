@@ -1,0 +1,20 @@
+# Discord chat channel example
+apiVersion: agents.agenticops.io/v1alpha1
+kind: Channel
+metadata:
+  name: discord-chat
+  labels:
+    app.kubernetes.io/name: agenticops-core
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  type: discord
+  agentRef: code-review-agent
+
+  discord:
+    botTokenSecret:
+      name: discord-bot-secret
+      key: BOT_TOKEN
+    allowedChannels:
+      - "9876543210"
+
+  image: ghcr.io/samyn92/channel-discord:latest

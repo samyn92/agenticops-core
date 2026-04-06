@@ -1,0 +1,20 @@
+# Slack chat channel example
+apiVersion: agents.agenticops.io/v1alpha1
+kind: Channel
+metadata:
+  name: slack-chat
+  labels:
+    app.kubernetes.io/name: agenticops-core
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  type: slack
+  agentRef: code-review-agent
+
+  slack:
+    botTokenSecret:
+      name: slack-bot-secret
+      key: BOT_TOKEN
+    allowedChannels:
+      - C0123456789
+
+  image: ghcr.io/samyn92/channel-slack:latest

@@ -37,12 +37,15 @@ spec:
           - "get_merge_request"
           - "get_merge_request_changes"
           - "create_merge_request_note"
+      directTools:
+        - create_merge_request_note
 
   storage:
     size: 5Gi
     storageClass: local-path
 
   compaction:
+    enabled: true
     strategy: auto
 
   concurrency:
