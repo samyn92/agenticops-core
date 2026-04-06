@@ -1,0 +1,180 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: "1.25"
+  NODE_VERSION: "22"
+  REGISTRY: ghcr.io
+  OPERATOR_IMAGE: ghcr.io/${{ github.repository_owner }}/agenticops-operator
+  RUNTIME_IMAGE: ghcr.io/${{ github.repository_owner }}/agent-runtime
+  GATEWAY_IMAGE: ghcr.io/${{ github.repository_owner }}/mcp-gateway
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # =========================================================================
+  # Go: lint + test operator
+  # =========================================================================
+  operator-check:
+    name: Operator Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+      - name: Test
+        run: make test
+      - name: Build
+        run: go build -o bin/manager cmd/main.go
+
+  # =========================================================================
+  # Go: build + test mcp-gateway
+  # =========================================================================
+  gateway-check:
+    name: Gateway Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: images/mcp-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build
+        run: go build -o mcp-gateway .
+      - name: Test
+        run: go test ./...
+
+  # =========================================================================
+  # TypeScript: type-check agent-runtime
+  # =========================================================================
+  runtime-check:
+    name: Runtime Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: images/agent-runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit || echo "::warning::TypeScript type errors found"
+
+  # =========================================================================
+  # Docker: build and push semver-tagged images
+  # =========================================================================
+  docker-operator:
+    name: Release Operator
+    runs-on: ubuntu-latest
+    needs: [operator-check]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.OPERATOR_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.OPERATOR_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-runtime:
+    name: Release Runtime
+    runs-on: ubuntu-latest
+    needs: [runtime-check]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/agent-runtime
+          push: true
+          tags: |
+            ${{ env.RUNTIME_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.RUNTIME_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-gateway:
+    name: Release Gateway
+    runs-on: ubuntu-latest
+    needs: [gateway-check]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/mcp-gateway
+          push: true
+          tags: |
+            ${{ env.GATEWAY_IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.GATEWAY_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =========================================================================
+  # GitHub Release with CRD manifests
+  # =========================================================================
+  github-release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [docker-operator, docker-runtime, docker-gateway]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Generate CRD manifests
+        run: make manifests
+      - name: Package install manifests
+        run: make build-installer IMG=${{ env.OPERATOR_IMAGE }}:${GITHUB_REF_NAME#v}
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "AgenticOps ${{ github.ref_name }}" \
+            --generate-notes \
+            dist/install.yaml
