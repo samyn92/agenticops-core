@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	agentsv1alpha1 "github.com/samyn92/agenticops-core/api/v1alpha1"
@@ -63,35 +62,42 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	// Save a copy for status patch comparison
+	statusPatch := client.MergeFrom(channel.DeepCopy())
+
 	log.Info("Reconciling Channel", "name", channel.Name, "type", channel.Spec.Type)
 
 	// Resolve the target Agent
 	agent := &agentsv1alpha1.Agent{}
 	if err := r.Get(ctx, types.NamespacedName{Name: channel.Spec.AgentRef, Namespace: channel.Namespace}, agent); err != nil {
-		return ctrl.Result{}, r.setChannelFailed(ctx, channel, fmt.Sprintf("Agent %q not found: %v", channel.Spec.AgentRef, err))
+		r.setChannelFailedStatus(channel, fmt.Sprintf("Agent %q not found: %v", channel.Spec.AgentRef, err))
+		if patchErr := patchStatus(ctx, r.Client, channel, statusPatch); patchErr != nil {
+			return ctrl.Result{}, patchErr
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// 1. Deployment
 	deployment := resources.BuildChannelDeployment(channel, agent)
-	if err := r.createOrUpdateChannel(ctx, deployment, channel); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, deployment); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// 2. Service
 	service := resources.BuildChannelService(channel)
-	if err := r.createOrUpdateChannel(ctx, service, channel); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, service); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// 3. Ingress (if webhook config set)
 	ingress := resources.BuildChannelIngress(channel)
 	if ingress != nil {
-		if err := r.createOrUpdateChannel(ctx, ingress, channel); err != nil {
+		if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, ingress); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
-	// 4. Update status
+	// 4. Compute status
 	channel.Status.ServiceURL = fmt.Sprintf("http://%s.%s.svc:8080", channel.Name, channel.Namespace)
 
 	if channel.Spec.Webhook != nil {
@@ -127,7 +133,8 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
-	if err := r.Status().Update(ctx, channel); err != nil {
+	// Patch status (only writes if status actually changed)
+	if err := patchStatus(ctx, r.Client, channel, statusPatch); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -135,25 +142,8 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
-func (r *ChannelReconciler) createOrUpdateChannel(ctx context.Context, obj client.Object, owner *agentsv1alpha1.Channel) error {
-	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
-		return fmt.Errorf("set controller reference: %w", err)
-	}
-
-	existing := obj.DeepCopyObject().(client.Object)
-	err := r.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, obj)
-	}
-	if err != nil {
-		return err
-	}
-
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	return r.Update(ctx, obj)
-}
-
-func (r *ChannelReconciler) setChannelFailed(ctx context.Context, ch *agentsv1alpha1.Channel, message string) error {
+// setChannelFailedStatus sets the Channel status to Failed. Caller must patch status.
+func (r *ChannelReconciler) setChannelFailedStatus(ch *agentsv1alpha1.Channel, message string) {
 	ch.Status.Phase = agentsv1alpha1.ChannelPhaseFailed
 	meta.SetStatusCondition(&ch.Status.Conditions, metav1.Condition{
 		Type:    agentsv1alpha1.ChannelConditionReady,
@@ -161,7 +151,6 @@ func (r *ChannelReconciler) setChannelFailed(ctx context.Context, ch *agentsv1al
 		Reason:  "Failed",
 		Message: message,
 	})
-	return r.Status().Update(ctx, ch)
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -76,41 +76,62 @@ func (r *AgentRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
+	// Save a copy for status patch comparison
+	statusPatch := client.MergeFrom(run.DeepCopy())
+
 	log.Info("Reconciling AgentRun", "name", run.Name, "phase", run.Status.Phase)
 
 	// Resolve the target Agent
 	agent := &agentsv1alpha1.Agent{}
 	if err := r.Get(ctx, types.NamespacedName{Name: run.Spec.AgentRef, Namespace: run.Namespace}, agent); err != nil {
-		return ctrl.Result{}, r.setRunFailed(ctx, run, fmt.Sprintf("Agent %q not found", run.Spec.AgentRef))
+		r.setRunFailedStatus(run, fmt.Sprintf("Agent %q not found", run.Spec.AgentRef))
+		if patchErr := patchStatus(ctx, r.Client, run, statusPatch); patchErr != nil {
+			return ctrl.Result{}, patchErr
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Set the mode from the agent
 	run.Status.Mode = agent.Spec.Mode
 
 	// Check concurrency
-	allowed, err := r.checkConcurrency(ctx, run, agent)
+	allowed, err := r.checkConcurrency(ctx, run, agent, statusPatch)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !allowed {
-		// Already set to Queued or Failed
+		// Already set to Queued or Failed and patched
 		return ctrl.Result{RequeueAfter: requeueInterval}, nil
 	}
 
 	// Execute based on agent mode
+	var result ctrl.Result
+	var reconcileErr error
+
 	switch agent.Spec.Mode {
 	case agentsv1alpha1.AgentModeTask:
-		return r.reconcileTaskRun(ctx, run, agent)
+		result, reconcileErr = r.reconcileTaskRun(ctx, run, agent)
 	case agentsv1alpha1.AgentModeDaemon:
-		return r.reconcileDaemonRun(ctx, run, agent)
+		result, reconcileErr = r.reconcileDaemonRun(ctx, run, agent)
 	default:
-		return ctrl.Result{}, r.setRunFailed(ctx, run, fmt.Sprintf("Unknown agent mode: %s", agent.Spec.Mode))
+		r.setRunFailedStatus(run, fmt.Sprintf("Unknown agent mode: %s", agent.Spec.Mode))
 	}
+
+	if reconcileErr != nil {
+		return ctrl.Result{}, reconcileErr
+	}
+
+	// Patch status (only writes if status actually changed)
+	if err := patchStatus(ctx, r.Client, run, statusPatch); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return result, nil
 }
 
 // checkConcurrency enforces the agent's concurrency policy.
 // Returns true if the run is allowed to proceed.
-func (r *AgentRunReconciler) checkConcurrency(ctx context.Context, run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent) (bool, error) {
+func (r *AgentRunReconciler) checkConcurrency(ctx context.Context, run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent, statusPatch client.Patch) (bool, error) {
 	maxRuns := 1
 	policy := "queue"
 	if agent.Spec.Concurrency != nil {
@@ -145,14 +166,18 @@ func (r *AgentRunReconciler) checkConcurrency(ctx context.Context, run *agentsv1
 		case "queue":
 			if run.Status.Phase != agentsv1alpha1.AgentRunPhaseQueued {
 				run.Status.Phase = agentsv1alpha1.AgentRunPhaseQueued
-				if err := r.Status().Update(ctx, run); err != nil {
+				if err := patchStatus(ctx, r.Client, run, statusPatch); err != nil {
 					return false, err
 				}
 			}
 			return false, nil
 
 		case "reject":
-			return false, r.setRunFailed(ctx, run, "Rejected: max concurrent runs exceeded")
+			r.setRunFailedStatus(run, "Rejected: max concurrent runs exceeded")
+			if err := patchStatus(ctx, r.Client, run, statusPatch); err != nil {
+				return false, err
+			}
+			return false, nil
 
 		case "replace":
 			// Cancel the oldest running run
@@ -184,6 +209,7 @@ func (r *AgentRunReconciler) cancelOldestRun(ctx context.Context, current *agent
 	})
 
 	oldest := &running[0]
+	patch := client.MergeFrom(oldest.DeepCopy())
 	oldest.Status.Phase = agentsv1alpha1.AgentRunPhaseFailed
 	now := metav1.Now()
 	oldest.Status.CompletionTime = &now
@@ -195,7 +221,7 @@ func (r *AgentRunReconciler) cancelOldestRun(ctx context.Context, current *agent
 		Message: fmt.Sprintf("Replaced by %s", current.Name),
 	})
 
-	return r.Status().Update(ctx, oldest)
+	return patchStatus(ctx, r.Client, oldest, patch)
 }
 
 // reconcileTaskRun handles task mode: create Job, poll status.
@@ -238,10 +264,6 @@ func (r *AgentRunReconciler) reconcileTaskRun(ctx context.Context, run *agentsv1
 		run.Status.JobName = job.Name
 		run.Status.Model = agent.Spec.Model
 
-		if err := r.Status().Update(ctx, run); err != nil {
-			return ctrl.Result{}, err
-		}
-
 		log.Info("Created Job for AgentRun", "job", job.Name)
 		return ctrl.Result{RequeueAfter: requeueInterval}, nil
 	}
@@ -264,9 +286,6 @@ func (r *AgentRunReconciler) reconcileTaskRun(ctx context.Context, run *agentsv1
 			Reason: "Succeeded",
 		})
 
-		if err := r.Status().Update(ctx, run); err != nil {
-			return ctrl.Result{}, err
-		}
 		return ctrl.Result{}, nil
 	}
 
@@ -282,9 +301,6 @@ func (r *AgentRunReconciler) reconcileTaskRun(ctx context.Context, run *agentsv1
 			Message: "Job execution failed",
 		})
 
-		if err := r.Status().Update(ctx, run); err != nil {
-			return ctrl.Result{}, err
-		}
 		return ctrl.Result{}, nil
 	}
 
@@ -324,8 +340,8 @@ func (r *AgentRunReconciler) reconcileDaemonRun(ctx context.Context, run *agents
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return ctrl.Result{}, r.setRunFailed(ctx, run,
-			fmt.Sprintf("Agent returned %d: %s", resp.StatusCode, string(respBody)))
+		r.setRunFailedStatus(run, fmt.Sprintf("Agent returned %d: %s", resp.StatusCode, string(respBody)))
+		return ctrl.Result{}, nil
 	}
 
 	// Parse response
@@ -362,10 +378,6 @@ func (r *AgentRunReconciler) reconcileDaemonRun(ctx context.Context, run *agents
 		run.Status.Phase = agentsv1alpha1.AgentRunPhaseRunning
 		run.Status.StartTime = &now
 		run.Status.Model = agent.Spec.Model
-	}
-
-	if err := r.Status().Update(ctx, run); err != nil {
-		return ctrl.Result{}, err
 	}
 
 	if run.Status.Phase == agentsv1alpha1.AgentRunPhaseRunning {
@@ -410,7 +422,7 @@ func (r *AgentRunReconciler) pollDaemonRunStatus(ctx context.Context, run *agent
 		return ctrl.Result{RequeueAfter: requeueInterval}, nil
 	}
 
-	// Complete
+	// Complete — caller will patch status
 	now := metav1.Now()
 	run.Status.Phase = agentsv1alpha1.AgentRunPhaseSucceeded
 	run.Status.CompletionTime = &now
@@ -425,7 +437,7 @@ func (r *AgentRunReconciler) pollDaemonRunStatus(ctx context.Context, run *agent
 		Reason: "Succeeded",
 	})
 
-	return ctrl.Result{}, r.Status().Update(ctx, run)
+	return ctrl.Result{}, nil
 }
 
 // getJobOutput reads the output from a completed Job's pod logs.
@@ -454,7 +466,8 @@ func (r *AgentRunReconciler) getJobOutput(ctx context.Context, job *batchv1.Job)
 	return "(no output captured)"
 }
 
-func (r *AgentRunReconciler) setRunFailed(ctx context.Context, run *agentsv1alpha1.AgentRun, message string) error {
+// setRunFailedStatus sets the AgentRun status to Failed. Caller must patch status.
+func (r *AgentRunReconciler) setRunFailedStatus(run *agentsv1alpha1.AgentRun, message string) {
 	now := metav1.Now()
 	run.Status.Phase = agentsv1alpha1.AgentRunPhaseFailed
 	run.Status.CompletionTime = &now
@@ -465,7 +478,6 @@ func (r *AgentRunReconciler) setRunFailed(ctx context.Context, run *agentsv1alph
 		Reason:  "Failed",
 		Message: message,
 	})
-	return r.Status().Update(ctx, run)
 }
 
 // SetupWithManager sets up the controller with the Manager.

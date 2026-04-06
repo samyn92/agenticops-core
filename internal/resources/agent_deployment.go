@@ -18,6 +18,7 @@ package resources
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	agentsv1alpha1 "github.com/samyn92/agenticops-core/api/v1alpha1"
@@ -37,10 +38,9 @@ func BuildAgentDeployment(agent *agentsv1alpha1.Agent, mcpServers []agentsv1alph
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            agent.Name,
-			Namespace:       agent.Namespace,
-			Labels:          labels,
-			OwnerReferences: []metav1.OwnerReference{AgentOwnerRef(agent)},
+			Name:      agent.Name,
+			Namespace: agent.Namespace,
+			Labels:    labels,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -388,22 +388,30 @@ func buildMainContainer(agent *agentsv1alpha1.Agent, taskMode bool) corev1.Conta
 		container.LivenessProbe = &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/healthz",
-					Port: intstr.FromInt32(AgentRuntimePort),
+					Path:   "/healthz",
+					Port:   intstr.FromInt32(AgentRuntimePort),
+					Scheme: corev1.URISchemeHTTP,
 				},
 			},
 			InitialDelaySeconds: 10,
 			PeriodSeconds:       30,
+			TimeoutSeconds:      1,
+			SuccessThreshold:    1,
+			FailureThreshold:    3,
 		}
 		container.ReadinessProbe = &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/healthz",
-					Port: intstr.FromInt32(AgentRuntimePort),
+					Path:   "/healthz",
+					Port:   intstr.FromInt32(AgentRuntimePort),
+					Scheme: corev1.URISchemeHTTP,
 				},
 			},
 			InitialDelaySeconds: 5,
 			PeriodSeconds:       10,
+			TimeoutSeconds:      1,
+			SuccessThreshold:    1,
+			FailureThreshold:    3,
 		}
 		container.Ports = []corev1.ContainerPort{
 			{
@@ -438,11 +446,16 @@ func buildEnvVars(agent *agentsv1alpha1.Agent) []corev1.EnvVar {
 		Value: string(agent.Spec.Mode),
 	})
 
-	// Plain-text env vars
-	for k, v := range agent.Spec.Env {
+	// Plain-text env vars (sort map keys for deterministic order)
+	envKeys := make([]string, 0, len(agent.Spec.Env))
+	for k := range agent.Spec.Env {
+		envKeys = append(envKeys, k)
+	}
+	sort.Strings(envKeys)
+	for _, k := range envKeys {
 		env = append(env, corev1.EnvVar{
 			Name:  k,
-			Value: v,
+			Value: agent.Spec.Env[k],
 		})
 	}
 
@@ -474,10 +487,15 @@ func buildEnvVars(agent *agentsv1alpha1.Agent) []corev1.EnvVar {
 
 	// Extension env vars
 	for _, ext := range agent.Spec.Extensions {
-		for k, v := range ext.Env {
+		extEnvKeys := make([]string, 0, len(ext.Env))
+		for k := range ext.Env {
+			extEnvKeys = append(extEnvKeys, k)
+		}
+		sort.Strings(extEnvKeys)
+		for _, k := range extEnvKeys {
 			env = append(env, corev1.EnvVar{
 				Name:  k,
-				Value: v,
+				Value: ext.Env[k],
 			})
 		}
 		for _, s := range ext.Secrets {

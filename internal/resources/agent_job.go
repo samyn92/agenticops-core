@@ -53,10 +53,9 @@ func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent,
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            run.Name,
-			Namespace:       run.Namespace,
-			Labels:          labels,
-			OwnerReferences: []metav1.OwnerReference{AgentRunOwnerRef(run)},
+			Name:      run.Name,
+			Namespace: run.Namespace,
+			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,

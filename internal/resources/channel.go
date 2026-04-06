@@ -82,11 +82,15 @@ func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Ag
 		LivenessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Path: "/healthz",
-					Port: intstr.FromInt32(8080),
+					Path:   "/healthz",
+					Port:   intstr.FromInt32(8080),
+					Scheme: corev1.URISchemeHTTP,
 				},
 			},
-			PeriodSeconds: 30,
+			PeriodSeconds:    30,
+			TimeoutSeconds:   1,
+			SuccessThreshold: 1,
+			FailureThreshold: 3,
 		},
 	}
 
@@ -96,10 +100,9 @@ func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Ag
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            ch.Name,
-			Namespace:       ch.Namespace,
-			Labels:          labels,
-			OwnerReferences: []metav1.OwnerReference{ChannelOwnerRef(ch)},
+			Name:      ch.Name,
+			Namespace: ch.Namespace,
+			Labels:    labels,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -240,7 +243,6 @@ func BuildChannelIngress(ch *agentsv1alpha1.Channel) *networkingv1.Ingress {
 				LabelComponent: "channel",
 				LabelManagedBy: ManagedByValue,
 			},
-			OwnerReferences: []metav1.OwnerReference{ChannelOwnerRef(ch)},
 		},
 		Spec: networkingv1.IngressSpec{
 			Rules: []networkingv1.IngressRule{

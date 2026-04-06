@@ -29,10 +29,9 @@ func BuildAgentPVC(agent *agentsv1alpha1.Agent) *corev1.PersistentVolumeClaim {
 
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            pvcName,
-			Namespace:       agent.Namespace,
-			Labels:          CommonLabels(agent.Name, "storage"),
-			OwnerReferences: []metav1.OwnerReference{AgentOwnerRef(agent)},
+			Name:      pvcName,
+			Namespace: agent.Namespace,
+			Labels:    CommonLabels(agent.Name, "storage"),
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},

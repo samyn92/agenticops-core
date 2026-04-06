@@ -28,10 +28,9 @@ import (
 func BuildAgentNetworkPolicy(agent *agentsv1alpha1.Agent) *networkingv1.NetworkPolicy {
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            ObjectName(agent.Name, "netpol"),
-			Namespace:       agent.Namespace,
-			Labels:          CommonLabels(agent.Name, "networkpolicy"),
-			OwnerReferences: []metav1.OwnerReference{AgentOwnerRef(agent)},
+			Name:      ObjectName(agent.Name, "netpol"),
+			Namespace: agent.Namespace,
+			Labels:    CommonLabels(agent.Name, "networkpolicy"),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{

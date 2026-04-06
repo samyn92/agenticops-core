@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	agentsv1alpha1 "github.com/samyn92/agenticops-core/api/v1alpha1"
@@ -64,44 +63,57 @@ func (r *MCPServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
+	// Save a copy for status patch comparison
+	statusPatch := client.MergeFrom(mcp.DeepCopy())
+
 	log.Info("Reconciling MCPServer", "name", mcp.Name)
 
+	var result ctrl.Result
+	var reconcileErr error
+
 	if mcp.Spec.Image != "" {
-		return r.reconcileDeployMode(ctx, mcp)
+		result, reconcileErr = r.reconcileDeployMode(ctx, mcp)
+	} else if mcp.Spec.URL != "" {
+		result, reconcileErr = r.reconcileExternalMode(ctx, mcp)
+	} else {
+		r.setMCPFailedStatus(mcp, "Neither image nor url is set")
 	}
 
-	if mcp.Spec.URL != "" {
-		return r.reconcileExternalMode(ctx, mcp)
+	if reconcileErr != nil {
+		return ctrl.Result{}, reconcileErr
 	}
 
-	return ctrl.Result{}, r.setMCPFailed(ctx, mcp, "Neither image nor url is set")
+	// Patch status (only writes if status actually changed)
+	if err := patchStatus(ctx, r.Client, mcp, statusPatch); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return result, nil
 }
 
 // reconcileDeployMode creates Deployment + Service + ConfigMap for an MCP server.
 func (r *MCPServerReconciler) reconcileDeployMode(ctx context.Context, mcp *agentsv1alpha1.MCPServer) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	mcp.Status.Phase = agentsv1alpha1.MCPServerPhaseDeploying
-
 	// 1. ConfigMap
 	cm := resources.BuildMCPServerConfigMap(mcp)
-	if err := r.createOrUpdateMCP(ctx, cm, mcp); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, mcp, cm); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// 2. Deployment
 	deployment := resources.BuildMCPServerDeployment(mcp)
-	if err := r.createOrUpdateMCP(ctx, deployment, mcp); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, mcp, deployment); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// 3. Service
 	service := resources.BuildMCPServerService(mcp)
-	if err := r.createOrUpdateMCP(ctx, service, mcp); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, mcp, service); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// 4. Check readiness
+	// 4. Check readiness and set status (caller will patch)
 	name := resources.MCPServerObjectName(mcp.Name)
 	actualDeploy := &appsv1.Deployment{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: mcp.Namespace}, actualDeploy); err == nil {
@@ -124,10 +136,6 @@ func (r *MCPServerReconciler) reconcileDeployMode(ctx context.Context, mcp *agen
 	}
 
 	mcp.Status.ServiceURL = resources.MCPServerServiceURL(mcp)
-
-	if err := r.Status().Update(ctx, mcp); err != nil {
-		return ctrl.Result{}, err
-	}
 
 	log.Info("MCPServer (deploy) reconciled", "phase", mcp.Status.Phase)
 	return ctrl.Result{}, nil
@@ -179,11 +187,7 @@ func (r *MCPServerReconciler) reconcileExternalMode(ctx context.Context, mcp *ag
 		}
 	}
 
-	if err := r.Status().Update(ctx, mcp); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Periodic re-check for external servers
+	// Periodic re-check for external servers (caller will patch status)
 	interval := 30 * time.Second
 	if mcp.Spec.HealthCheck != nil && mcp.Spec.HealthCheck.IntervalSeconds > 0 {
 		interval = time.Duration(mcp.Spec.HealthCheck.IntervalSeconds) * time.Second
@@ -193,25 +197,8 @@ func (r *MCPServerReconciler) reconcileExternalMode(ctx context.Context, mcp *ag
 	return ctrl.Result{RequeueAfter: interval}, nil
 }
 
-func (r *MCPServerReconciler) createOrUpdateMCP(ctx context.Context, obj client.Object, owner *agentsv1alpha1.MCPServer) error {
-	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
-		return fmt.Errorf("set controller reference: %w", err)
-	}
-
-	existing := obj.DeepCopyObject().(client.Object)
-	err := r.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, obj)
-	}
-	if err != nil {
-		return err
-	}
-
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	return r.Update(ctx, obj)
-}
-
-func (r *MCPServerReconciler) setMCPFailed(ctx context.Context, mcp *agentsv1alpha1.MCPServer, message string) error {
+// setMCPFailedStatus sets the MCPServer status to Failed. Caller must patch status.
+func (r *MCPServerReconciler) setMCPFailedStatus(mcp *agentsv1alpha1.MCPServer, message string) {
 	mcp.Status.Phase = agentsv1alpha1.MCPServerPhaseFailed
 	meta.SetStatusCondition(&mcp.Status.Conditions, metav1.Condition{
 		Type:    agentsv1alpha1.MCPServerConditionReady,
@@ -219,7 +206,6 @@ func (r *MCPServerReconciler) setMCPFailed(ctx context.Context, mcp *agentsv1alp
 		Reason:  "Failed",
 		Message: message,
 	})
-	return r.Status().Update(ctx, mcp)
 }
 
 // SetupWithManager sets up the controller with the Manager.

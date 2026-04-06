@@ -18,6 +18,7 @@ package resources
 
 import (
 	"fmt"
+	"sort"
 
 	agentsv1alpha1 "github.com/samyn92/agenticops-core/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -43,10 +44,16 @@ func BuildMCPServerDeployment(mcp *agentsv1alpha1.MCPServer) *appsv1.Deployment 
 
 	var replicas int32 = 1
 
-	// Build env vars
-	env := make([]corev1.EnvVar, 0, len(mcp.Spec.Env)+len(mcp.Spec.Secrets))
-	for k, v := range mcp.Spec.Env {
-		env = append(env, corev1.EnvVar{Name: k, Value: v})
+	// Build env vars from spec (sort map keys for deterministic order)
+	envKeys := make([]string, 0, len(mcp.Spec.Env))
+	for k := range mcp.Spec.Env {
+		envKeys = append(envKeys, k)
+	}
+	sort.Strings(envKeys)
+
+	env := make([]corev1.EnvVar, 0, len(mcp.Spec.Env)+len(mcp.Spec.Secrets)+2)
+	for _, k := range envKeys {
+		env = append(env, corev1.EnvVar{Name: k, Value: mcp.Spec.Env[k]})
 	}
 	for _, s := range mcp.Spec.Secrets {
 		env = append(env, corev1.EnvVar{
@@ -96,20 +103,28 @@ func BuildMCPServerDeployment(mcp *agentsv1alpha1.MCPServer) *appsv1.Deployment 
 		container.LivenessProbe = &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Path: mcp.Spec.HealthCheck.Path,
-					Port: intstr.FromInt32(port),
+					Path:   mcp.Spec.HealthCheck.Path,
+					Port:   intstr.FromInt32(port),
+					Scheme: corev1.URISchemeHTTP,
 				},
 			},
-			PeriodSeconds: interval,
+			PeriodSeconds:    interval,
+			TimeoutSeconds:   1,
+			SuccessThreshold: 1,
+			FailureThreshold: 3,
 		}
 		container.ReadinessProbe = &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
-					Path: mcp.Spec.HealthCheck.Path,
-					Port: intstr.FromInt32(port),
+					Path:   mcp.Spec.HealthCheck.Path,
+					Port:   intstr.FromInt32(port),
+					Scheme: corev1.URISchemeHTTP,
 				},
 			},
-			PeriodSeconds: interval,
+			PeriodSeconds:    interval,
+			TimeoutSeconds:   1,
+			SuccessThreshold: 1,
+			FailureThreshold: 3,
 		}
 	}
 
@@ -123,10 +138,9 @@ func BuildMCPServerDeployment(mcp *agentsv1alpha1.MCPServer) *appsv1.Deployment 
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            name,
-			Namespace:       mcp.Namespace,
-			Labels:          labels,
-			OwnerReferences: []metav1.OwnerReference{MCPServerOwnerRef(mcp)},
+			Name:      name,
+			Namespace: mcp.Namespace,
+			Labels:    labels,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,

@@ -94,10 +94,9 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent) (*corev1.ConfigMap, error)
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            ObjectName(agent.Name, "config"),
-			Namespace:       agent.Namespace,
-			Labels:          CommonLabels(agent.Name, "config"),
-			OwnerReferences: []metav1.OwnerReference{AgentOwnerRef(agent)},
+			Name:      ObjectName(agent.Name, "config"),
+			Namespace: agent.Namespace,
+			Labels:    CommonLabels(agent.Name, "config"),
 		},
 		Data: map[string]string{
 			"config.json": string(data),
@@ -195,10 +194,9 @@ func BuildGatewayConfigMap(agent *agentsv1alpha1.Agent) (*corev1.ConfigMap, erro
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            ObjectName(agent.Name, "gateway"),
-			Namespace:       agent.Namespace,
-			Labels:          CommonLabels(agent.Name, "gateway"),
-			OwnerReferences: []metav1.OwnerReference{AgentOwnerRef(agent)},
+			Name:      ObjectName(agent.Name, "gateway"),
+			Namespace: agent.Namespace,
+			Labels:    CommonLabels(agent.Name, "gateway"),
 		},
 		Data: map[string]string{
 			"permissions.json": string(data),
@@ -247,10 +245,9 @@ func BuildMCPConfigMap(agent *agentsv1alpha1.Agent) (*corev1.ConfigMap, error) {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            ObjectName(agent.Name, "mcp"),
-			Namespace:       agent.Namespace,
-			Labels:          CommonLabels(agent.Name, "mcp"),
-			OwnerReferences: []metav1.OwnerReference{AgentOwnerRef(agent)},
+			Name:      ObjectName(agent.Name, "mcp"),
+			Namespace: agent.Namespace,
+			Labels:    CommonLabels(agent.Name, "mcp"),
 		},
 		Data: map[string]string{
 			"mcp.json": string(data),
@@ -270,7 +267,6 @@ func BuildMCPServerConfigMap(mcp *agentsv1alpha1.MCPServer) *corev1.ConfigMap {
 				LabelComponent: "mcp-server",
 				LabelManagedBy: ManagedByValue,
 			},
-			OwnerReferences: []metav1.OwnerReference{MCPServerOwnerRef(mcp)},
 		},
 		Data: map[string]string{
 			"port": fmt.Sprintf("%d", mcp.Spec.Port),

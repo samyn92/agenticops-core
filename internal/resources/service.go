@@ -29,10 +29,9 @@ import (
 func BuildAgentService(agent *agentsv1alpha1.Agent) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            agent.Name,
-			Namespace:       agent.Namespace,
-			Labels:          CommonLabels(agent.Name, "service"),
-			OwnerReferences: []metav1.OwnerReference{AgentOwnerRef(agent)},
+			Name:      agent.Name,
+			Namespace: agent.Namespace,
+			Labels:    CommonLabels(agent.Name, "service"),
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
@@ -67,7 +66,6 @@ func BuildMCPServerService(mcp *agentsv1alpha1.MCPServer) *corev1.Service {
 				LabelComponent: "mcp-server",
 				LabelManagedBy: ManagedByValue,
 			},
-			OwnerReferences: []metav1.OwnerReference{MCPServerOwnerRef(mcp)},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
@@ -96,7 +94,6 @@ func BuildChannelService(ch *agentsv1alpha1.Channel) *corev1.Service {
 				LabelComponent: "channel",
 				LabelManagedBy: ManagedByValue,
 			},
-			OwnerReferences: []metav1.OwnerReference{ChannelOwnerRef(ch)},
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{

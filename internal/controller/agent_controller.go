@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	agentsv1alpha1 "github.com/samyn92/agenticops-core/api/v1alpha1"
@@ -65,12 +64,19 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// Save a copy for status patch comparison
+	statusPatch := client.MergeFrom(agent.DeepCopy())
+
 	log.Info("Reconciling Agent", "name", agent.Name, "mode", agent.Spec.Mode)
 
 	// Resolve referenced MCPServers
 	mcpServers, err := r.resolveMCPServers(ctx, agent)
 	if err != nil {
-		return ctrl.Result{}, r.setAgentPhase(ctx, agent, agentsv1alpha1.AgentPhaseFailed, err.Error())
+		r.setAgentFailedStatus(agent, agentsv1alpha1.AgentPhaseFailed, err.Error())
+		if patchErr := patchStatus(ctx, r.Client, agent, statusPatch); patchErr != nil {
+			return ctrl.Result{}, patchErr
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Validate MCPServers are ready
@@ -81,8 +87,8 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			Reason:  "MCPServerNotReady",
 			Message: err.Error(),
 		})
-		if updateErr := r.Status().Update(ctx, agent); updateErr != nil {
-			return ctrl.Result{}, updateErr
+		if patchErr := patchStatus(ctx, r.Client, agent, statusPatch); patchErr != nil {
+			return ctrl.Result{}, patchErr
 		}
 		return ctrl.Result{RequeueAfter: requeueInterval}, nil
 	}
@@ -105,14 +111,28 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	})
 
 	// Branch by mode
+	var result ctrl.Result
+	var reconcileErr error
+
 	switch agent.Spec.Mode {
 	case agentsv1alpha1.AgentModeDaemon:
-		return r.reconcileDaemon(ctx, agent, mcpServers)
+		result, reconcileErr = r.reconcileDaemon(ctx, agent, mcpServers)
 	case agentsv1alpha1.AgentModeTask:
-		return r.reconcileTask(ctx, agent)
+		result, reconcileErr = r.reconcileTask(ctx, agent)
 	default:
 		return ctrl.Result{}, fmt.Errorf("unknown agent mode: %s", agent.Spec.Mode)
 	}
+
+	if reconcileErr != nil {
+		return ctrl.Result{}, reconcileErr
+	}
+
+	// Patch status (only writes if status actually changed)
+	if err := patchStatus(ctx, r.Client, agent, statusPatch); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	return result, nil
 }
 
 // reconcileDaemon handles daemon mode: PVC -> ConfigMaps -> Deployment -> Service -> NetworkPolicy -> status.
@@ -122,7 +142,7 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 	// 1. PVC
 	if agent.Spec.Storage != nil {
 		pvc := resources.BuildAgentPVC(agent)
-		if err := r.createOrUpdate(ctx, pvc, agent); err != nil {
+		if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, pvc); err != nil {
 			return ctrl.Result{}, err
 		}
 		agent.Status.StoragePVC = pvc.Name
@@ -133,7 +153,7 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.createOrUpdate(ctx, configMap, agent); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, configMap); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -144,7 +164,7 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 			return ctrl.Result{}, err
 		}
 		if gwCM != nil {
-			if err := r.createOrUpdate(ctx, gwCM, agent); err != nil {
+			if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, gwCM); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -155,7 +175,7 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 			return ctrl.Result{}, err
 		}
 		if mcpCM != nil {
-			if err := r.createOrUpdate(ctx, mcpCM, agent); err != nil {
+			if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, mcpCM); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -163,20 +183,20 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 
 	// 5. Deployment
 	deployment := resources.BuildAgentDeployment(agent, mcpServers)
-	if err := r.createOrUpdate(ctx, deployment, agent); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, deployment); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// 6. Service
 	service := resources.BuildAgentService(agent)
-	if err := r.createOrUpdate(ctx, service, agent); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, service); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// 7. NetworkPolicy (if enabled)
 	if agent.Spec.NetworkPolicy != nil && agent.Spec.NetworkPolicy.Enabled {
 		netpol := resources.BuildAgentNetworkPolicy(agent)
-		if err := r.createOrUpdate(ctx, netpol, agent); err != nil {
+		if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, netpol); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -217,10 +237,6 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 		})
 	}
 
-	if err := r.Status().Update(ctx, agent); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	log.Info("Daemon agent reconciled", "phase", agent.Status.Phase)
 	return ctrl.Result{}, nil
 }
@@ -234,7 +250,7 @@ func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alph
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.createOrUpdate(ctx, configMap, agent); err != nil {
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, configMap); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -245,7 +261,7 @@ func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alph
 			return ctrl.Result{}, err
 		}
 		if gwCM != nil {
-			if err := r.createOrUpdate(ctx, gwCM, agent); err != nil {
+			if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, gwCM); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -255,7 +271,7 @@ func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alph
 			return ctrl.Result{}, err
 		}
 		if mcpCM != nil {
-			if err := r.createOrUpdate(ctx, mcpCM, agent); err != nil {
+			if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, mcpCM); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -278,10 +294,6 @@ func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alph
 		Status: metav1.ConditionTrue,
 		Reason: "Ready",
 	})
-
-	if err := r.Status().Update(ctx, agent); err != nil {
-		return ctrl.Result{}, err
-	}
 
 	log.Info("Task agent reconciled", "phase", agent.Status.Phase)
 	return ctrl.Result{}, nil
@@ -310,28 +322,8 @@ func (r *AgentReconciler) validateMCPServersReady(servers []agentsv1alpha1.MCPSe
 	return nil
 }
 
-// createOrUpdate applies a resource using server-side apply semantics.
-func (r *AgentReconciler) createOrUpdate(ctx context.Context, obj client.Object, owner *agentsv1alpha1.Agent) error {
-	// Set controller reference
-	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
-		return fmt.Errorf("set controller reference: %w", err)
-	}
-
-	existing := obj.DeepCopyObject().(client.Object)
-	err := r.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, obj)
-	}
-	if err != nil {
-		return err
-	}
-
-	// Preserve resource version for update
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	return r.Update(ctx, obj)
-}
-
-func (r *AgentReconciler) setAgentPhase(ctx context.Context, agent *agentsv1alpha1.Agent, phase agentsv1alpha1.AgentPhase, message string) error {
+// setAgentFailedStatus sets the Agent status to a failed phase. Caller must patch status.
+func (r *AgentReconciler) setAgentFailedStatus(agent *agentsv1alpha1.Agent, phase agentsv1alpha1.AgentPhase, message string) {
 	agent.Status.Phase = phase
 	meta.SetStatusCondition(&agent.Status.Conditions, metav1.Condition{
 		Type:    agentsv1alpha1.AgentConditionReady,
@@ -339,7 +331,6 @@ func (r *AgentReconciler) setAgentPhase(ctx context.Context, agent *agentsv1alph
 		Reason:  string(phase),
 		Message: message,
 	})
-	return r.Status().Update(ctx, agent)
 }
 
 // SetupWithManager sets up the controller with the Manager.
