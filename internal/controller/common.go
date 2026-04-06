@@ -33,16 +33,17 @@ import (
 const (
 	// requeueInterval is the default requeue interval for controllers waiting on async work.
 	requeueInterval = 10 * time.Second
+	// fieldManager is the SSA field manager name for the operator.
+	fieldManager = "agenticops-operator"
 )
 
-// reconcileOwnedResource creates or updates a child resource using controllerutil.CreateOrUpdate.
-// It only triggers an API write if the mutate function actually changes the object,
-// preventing infinite reconciliation loops from owned-resource watches.
+// reconcileOwnedResource creates or updates a child resource.
 //
-// IMPORTANT: The mutate function must only set fields the operator manages.
-// It must NOT replace entire sub-structs (e.g. Spec.Template, Spec) because the
-// API server adds defaulted fields (DNSPolicy, RestartPolicy, imagePullPolicy, etc.)
-// that would be wiped, causing a diff on every reconcile → infinite loop.
+// For Deployments, it uses Server-Side Apply (SSA) to avoid infinite
+// reconciliation loops caused by API-server-defaulted fields.
+//
+// For other resource types, it uses controllerutil.CreateOrUpdate with
+// careful field-by-field merging to preserve API-server defaults.
 func reconcileOwnedResource(
 	ctx context.Context,
 	c client.Client,
@@ -55,43 +56,18 @@ func reconcileOwnedResource(
 
 	switch d := desired.(type) {
 	case *appsv1.Deployment:
-		existing := &appsv1.Deployment{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			// Labels & annotations: merge desired into existing (don't clobber API-added labels)
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-
-			// Deployment-level spec: only replicas and selector (both are ours)
-			existing.Spec.Replicas = d.Spec.Replicas
-			existing.Spec.Selector = d.Spec.Selector
-
-			// Pod template metadata: merge labels (API server doesn't add any, but be safe)
-			existing.Spec.Template.Labels = mergeLabels(existing.Spec.Template.Labels, d.Spec.Template.Labels)
-			existing.Spec.Template.Annotations = mergeLabels(existing.Spec.Template.Annotations, d.Spec.Template.Annotations)
-
-			// Pod spec: only update the fields we control, preserve API-server defaults
-			// (DNSPolicy, RestartPolicy, SchedulerName, TerminationGracePeriodSeconds, SecurityContext, etc.)
-			desiredPodSpec := &d.Spec.Template.Spec
-			existingPodSpec := &existing.Spec.Template.Spec
-
-			existingPodSpec.ServiceAccountName = desiredPodSpec.ServiceAccountName
-			existingPodSpec.InitContainers = desiredPodSpec.InitContainers
-			existingPodSpec.Volumes = desiredPodSpec.Volumes
-
-			// Merge containers: match by name, update image/env/ports/resources/command/volumeMounts/probes
-			existingPodSpec.Containers = mergeContainers(existingPodSpec.Containers, desiredPodSpec.Containers)
-
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile Deployment %s: %w", key, err)
+		// Use Server-Side Apply for Deployments. SSA only manages fields
+		// explicitly set in the apply configuration, so API-server defaults
+		// (imagePullPolicy, terminationMessagePath, etc.) are never touched.
+		if err := controllerutil.SetControllerReference(owner, d, scheme); err != nil {
+			return fmt.Errorf("set owner ref on Deployment %s: %w", key, err)
 		}
-		log.V(1).Info("CreateOrUpdate Deployment", "name", key.Name, "result", result)
+		// SSA requires GVK to be set on the object.
+		d.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind("Deployment"))
+		if err := c.Patch(ctx, d, client.Apply, client.FieldOwner(fieldManager), client.ForceOwnership); err != nil {
+			return fmt.Errorf("apply Deployment %s: %w", key, err)
+		}
+		log.V(1).Info("Applied Deployment (SSA)", "name", key.Name)
 		return nil
 
 	case *corev1.Service:
@@ -219,66 +195,6 @@ func mergeLabels(existing, desired map[string]string) map[string]string {
 		merged[k] = v
 	}
 	return merged
-}
-
-// mergeContainers updates existing containers with desired values, matched by name.
-// Only fields the operator manages are updated; API-server defaults (imagePullPolicy,
-// terminationMessagePath, terminationMessagePolicy, probe thresholds, etc.) are preserved.
-func mergeContainers(existing, desired []corev1.Container) []corev1.Container {
-	if len(existing) == 0 {
-		return desired
-	}
-
-	existingByName := make(map[string]int, len(existing))
-	for i := range existing {
-		existingByName[existing[i].Name] = i
-	}
-
-	for _, dc := range desired {
-		idx, found := existingByName[dc.Name]
-		if !found {
-			// New container — append
-			existing = append(existing, dc)
-			continue
-		}
-		ec := &existing[idx]
-
-		// Update only operator-managed fields
-		ec.Image = dc.Image
-		ec.Command = dc.Command
-		ec.Args = dc.Args
-		ec.Env = dc.Env
-		ec.EnvFrom = dc.EnvFrom
-		ec.Ports = dc.Ports
-		ec.VolumeMounts = dc.VolumeMounts
-		if dc.Resources.Limits != nil || dc.Resources.Requests != nil {
-			ec.Resources = dc.Resources
-		}
-
-		// Probes: only update if desired specifies them (don't nil out existing probes)
-		if dc.LivenessProbe != nil {
-			ec.LivenessProbe = dc.LivenessProbe
-		}
-		if dc.ReadinessProbe != nil {
-			ec.ReadinessProbe = dc.ReadinessProbe
-		}
-		if dc.StartupProbe != nil {
-			ec.StartupProbe = dc.StartupProbe
-		}
-	}
-
-	// Remove containers not in desired (operator removed them)
-	desiredNames := make(map[string]bool, len(desired))
-	for _, dc := range desired {
-		desiredNames[dc.Name] = true
-	}
-	filtered := existing[:0]
-	for _, ec := range existing {
-		if desiredNames[ec.Name] {
-			filtered = append(filtered, ec)
-		}
-	}
-	return filtered
 }
 
 // patchStatus patches the status subresource only if it has changed.

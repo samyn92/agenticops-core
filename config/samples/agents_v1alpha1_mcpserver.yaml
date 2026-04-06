@@ -1,4 +1,6 @@
-# Deploy mode: operator manages the MCP server lifecycle
+# External mode: operator validates and health-checks an existing MCP server.
+# Use this when the MCP server is managed outside the operator (e.g. a SaaS
+# endpoint or a separate deployment).
 apiVersion: agents.agenticops.io/v1alpha1
 kind: MCPServer
 metadata:
@@ -7,28 +9,38 @@ metadata:
     app.kubernetes.io/name: agenticops-core
     app.kubernetes.io/managed-by: kustomize
 spec:
-  image: ghcr.io/samyn92/mcp-gitlab:latest
-  port: 8080
-  command:
-    - node
-    - /app/server.js
-
-  env:
-    GITLAB_URL: "https://gitlab.com"
-
-  secrets:
-    - name: GITLAB_TOKEN
-      secretRef:
-        name: gitlab-credentials
-        key: token
+  url: "https://mcp.example.com/gitlab"
 
   healthCheck:
-    path: /health
+    url: "https://mcp.example.com/gitlab/health"
     intervalSeconds: 30
-
-  resources:
-    requests:
-      memory: 128Mi
-      cpu: 100m
-    limits:
-      memory: 256Mi
+---
+# Deploy mode (commented out): operator manages the MCP server lifecycle.
+# Uncomment and replace `spec.image` with a real MCP server image to test.
+#
+# apiVersion: agents.agenticops.io/v1alpha1
+# kind: MCPServer
+# metadata:
+#   name: gitlab-mcp-deploy
+# spec:
+#   image: ghcr.io/samyn92/mcp-gitlab:latest
+#   port: 8080
+#   command:
+#     - node
+#     - /app/server.js
+#   env:
+#     GITLAB_URL: "https://gitlab.com"
+#   secrets:
+#     - name: GITLAB_TOKEN
+#       secretRef:
+#         name: gitlab-credentials
+#         key: token
+#   healthCheck:
+#     path: /health
+#     intervalSeconds: 30
+#   resources:
+#     requests:
+#       memory: 128Mi
+#       cpu: 100m
+#     limits:
+#       memory: 256Mi

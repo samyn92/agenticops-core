@@ -30,8 +30,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	agentsv1alpha1 "github.com/samyn92/agenticops-core/api/v1alpha1"
 	"github.com/samyn92/agenticops-core/internal/resources"
@@ -140,6 +142,12 @@ func (r *MCPServerReconciler) reconcileDeployMode(ctx context.Context, mcp *agen
 	mcp.Status.ServiceURL = resources.MCPServerServiceURL(mcp)
 
 	log.Info("MCPServer (deploy) reconciled", "phase", mcp.Status.Phase)
+
+	// Requeue to poll for readiness since we filter Deployment status-only updates
+	// via GenerationChangedPredicate.
+	if mcp.Status.Phase != agentsv1alpha1.MCPServerPhaseReady {
+		return ctrl.Result{RequeueAfter: requeueInterval}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -216,7 +224,7 @@ func (r *MCPServerReconciler) setMCPFailedStatus(mcp *agentsv1alpha1.MCPServer, 
 func (r *MCPServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&agentsv1alpha1.MCPServer{}).
-		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.Deployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ConfigMap{}).
 		Named("mcpserver").

@@ -29,8 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	agentsv1alpha1 "github.com/samyn92/agenticops-core/api/v1alpha1"
 	"github.com/samyn92/agenticops-core/internal/resources"
@@ -240,6 +242,12 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 	}
 
 	log.Info("Daemon agent reconciled", "phase", agent.Status.Phase)
+
+	// Requeue to poll for readiness since we filter Deployment status-only updates
+	// via GenerationChangedPredicate.
+	if agent.Status.Phase != agentsv1alpha1.AgentPhaseRunning {
+		return ctrl.Result{RequeueAfter: requeueInterval}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -341,7 +349,7 @@ func (r *AgentReconciler) setAgentFailedStatus(agent *agentsv1alpha1.Agent, phas
 func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&agentsv1alpha1.Agent{}).
-		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.Deployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
