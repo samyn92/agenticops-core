@@ -121,7 +121,7 @@ func buildExtensionConfig(agent *agentsv1alpha1.Agent) OperatorExtensionConfig {
 		Providers:       []ProviderEntry{}, // never nil — runtime iterates this
 		PrimaryProvider: primaryProvider,
 		PrimaryModel:    primaryModel,
-		ThinkingLevel:   string(agent.Spec.ThinkingLevel),
+		ThinkingLevel:   agent.Spec.ThinkingLevel,
 		SystemPrompt:    agent.Spec.SystemPrompt,
 		BuiltinTools:    agent.Spec.BuiltinTools,
 	}
