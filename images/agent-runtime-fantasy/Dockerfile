@@ -9,11 +9,8 @@ COPY *.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o agent-runtime .
 
 FROM alpine:3.21
-# Install minimal tools needed by built-in tools and common MCP tool servers
-RUN apk add --no-cache bash curl ripgrep \
-    && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
-    && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
-    && rm kubectl
+# Install minimal tools needed by built-in tools
+RUN apk add --no-cache bash curl ripgrep
 COPY --from=builder /app/agent-runtime /app/agent-runtime
 
 # Create data directories
