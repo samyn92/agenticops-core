@@ -75,7 +75,7 @@ func buildAgentPodSpec(agent *agentsv1alpha1.Agent, mcpServers []agentsv1alpha1.
 	// Sidecar containers: MCP gateway proxies
 	var sidecars []corev1.Container
 	for i, ms := range agent.Spec.MCPServers {
-		sidecar := buildGatewaySidecar(agent, ms, mcpServers, i)
+		sidecar := buildGatewaySidecar(ms, mcpServers, i)
 		if sidecar != nil {
 			sidecars = append(sidecars, *sidecar)
 		}
@@ -228,7 +228,7 @@ func buildVolumes(agent *agentsv1alpha1.Agent, taskMode bool) []corev1.Volume {
 }
 
 func buildInitContainers(agent *agentsv1alpha1.Agent) []corev1.Container {
-	var inits []corev1.Container
+	inits := make([]corev1.Container, 0, len(agent.Spec.ToolRefs)+len(agent.Spec.Extensions)+len(agent.Spec.Skills))
 
 	// OCI tool pulls
 	for _, tr := range agent.Spec.ToolRefs {
@@ -348,7 +348,7 @@ func buildMainContainer(agent *agentsv1alpha1.Agent, taskMode bool) corev1.Conta
 	}
 
 	// Environment variables
-	env := buildEnvVars(agent, taskMode)
+	env := buildEnvVars(agent)
 
 	// Build command based on mode
 	var command []string
@@ -417,8 +417,8 @@ func buildMainContainer(agent *agentsv1alpha1.Agent, taskMode bool) corev1.Conta
 	return container
 }
 
-func buildEnvVars(agent *agentsv1alpha1.Agent, taskMode bool) []corev1.EnvVar {
-	var env []corev1.EnvVar
+func buildEnvVars(agent *agentsv1alpha1.Agent) []corev1.EnvVar {
+	env := make([]corev1.EnvVar, 0, 3+len(agent.Spec.Env)+len(agent.Spec.Secrets))
 
 	// Agent name
 	env = append(env, corev1.EnvVar{
@@ -496,7 +496,7 @@ func buildEnvVars(agent *agentsv1alpha1.Agent, taskMode bool) []corev1.EnvVar {
 	return env
 }
 
-func buildGatewaySidecar(agent *agentsv1alpha1.Agent, binding agentsv1alpha1.MCPServerBinding, mcpServers []agentsv1alpha1.MCPServer, index int) *corev1.Container {
+func buildGatewaySidecar(binding agentsv1alpha1.MCPServerBinding, mcpServers []agentsv1alpha1.MCPServer, index int) *corev1.Container {
 	// Find the MCPServer to get its service URL
 	var upstream string
 	for _, mcp := range mcpServers {

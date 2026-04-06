@@ -1,30 +1,18 @@
 # Agent Runtime — Node.js container with Pi SDK
-# Two entry points: agent-server.js (daemon) and agent-task.js (task)
+# Two entry points: agent-server.ts (daemon) and agent-task.ts (task)
+# NOTE: Runs TypeScript source directly via tsx until Pi SDK API rewrite is done.
 
-FROM node:22-slim AS builder
-
-WORKDIR /app
-
-# Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
-
-# Copy source and build
-COPY tsconfig.json ./
-COPY src/ ./src/
-RUN npm run build
-
-# Production image
 FROM node:22-slim
 
 WORKDIR /app
 
-# Install production dependencies only
+# Install all dependencies (tsx needed at runtime for now)
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm ci --ignore-scripts && npm cache clean --force
 
-# Copy built output
-COPY --from=builder /app/dist ./dist
+# Copy TypeScript source
+COPY tsconfig.json ./
+COPY src/ ./src/
 
 # Create data directories
 RUN mkdir -p /data/sessions /data/repos /data/scratch \
@@ -33,4 +21,4 @@ RUN mkdir -p /data/sessions /data/repos /data/scratch \
 USER 1000:1000
 
 # Default: daemon mode. Override CMD for task mode.
-CMD ["node", "/app/dist/agent-server.js"]
+CMD ["npx", "tsx", "/app/src/agent-server.ts"]

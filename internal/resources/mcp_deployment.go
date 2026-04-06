@@ -44,7 +44,7 @@ func BuildMCPServerDeployment(mcp *agentsv1alpha1.MCPServer) *appsv1.Deployment 
 	var replicas int32 = 1
 
 	// Build env vars
-	var env []corev1.EnvVar
+	env := make([]corev1.EnvVar, 0, len(mcp.Spec.Env)+len(mcp.Spec.Secrets))
 	for k, v := range mcp.Spec.Env {
 		env = append(env, corev1.EnvVar{Name: k, Value: v})
 	}

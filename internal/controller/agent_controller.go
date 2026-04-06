@@ -74,7 +74,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Validate MCPServers are ready
-	if err := r.validateMCPServersReady(agent, mcpServers); err != nil {
+	if err := r.validateMCPServersReady(mcpServers); err != nil {
 		meta.SetStatusCondition(&agent.Status.Conditions, metav1.Condition{
 			Type:    agentsv1alpha1.AgentConditionMCPServersReady,
 			Status:  metav1.ConditionFalse,
@@ -289,7 +289,7 @@ func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alph
 
 // resolveMCPServers fetches all MCPServer CRs referenced by the agent.
 func (r *AgentReconciler) resolveMCPServers(ctx context.Context, agent *agentsv1alpha1.Agent) ([]agentsv1alpha1.MCPServer, error) {
-	var servers []agentsv1alpha1.MCPServer
+	servers := make([]agentsv1alpha1.MCPServer, 0, len(agent.Spec.MCPServers))
 	for _, binding := range agent.Spec.MCPServers {
 		mcp := &agentsv1alpha1.MCPServer{}
 		if err := r.Get(ctx, types.NamespacedName{Name: binding.Name, Namespace: agent.Namespace}, mcp); err != nil {
@@ -301,7 +301,7 @@ func (r *AgentReconciler) resolveMCPServers(ctx context.Context, agent *agentsv1
 }
 
 // validateMCPServersReady checks all referenced MCPServers are in Ready phase.
-func (r *AgentReconciler) validateMCPServersReady(agent *agentsv1alpha1.Agent, servers []agentsv1alpha1.MCPServer) error {
+func (r *AgentReconciler) validateMCPServersReady(servers []agentsv1alpha1.MCPServer) error {
 	for _, mcp := range servers {
 		if mcp.Status.Phase != agentsv1alpha1.MCPServerPhaseReady {
 			return fmt.Errorf("MCPServer %q is not Ready (phase: %s)", mcp.Name, mcp.Status.Phase)

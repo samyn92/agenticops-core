@@ -76,40 +76,65 @@ func (r *Agent) validate() (admission.Warnings, error) {
 	var warnings admission.Warnings
 	specPath := field.NewPath("spec")
 
-	// Mode validation
+	allErrs = append(allErrs, r.validateMode(specPath)...)
+	errs, warns := r.validateProviderAndTools(specPath)
+	allErrs = append(allErrs, errs...)
+	warnings = append(warnings, warns...)
+	errs, warns = r.validateToolHooks(specPath)
+	allErrs = append(allErrs, errs...)
+	warnings = append(warnings, warns...)
+	allErrs = append(allErrs, r.validateResourceRefs(specPath)...)
+
+	if len(allErrs) > 0 {
+		return warnings, apierrors.NewInvalid(
+			schema.GroupKind{Group: GroupVersion.Group, Kind: "Agent"},
+			r.Name, allErrs)
+	}
+
+	return warnings, nil
+}
+
+func (r *Agent) validateMode(specPath *field.Path) field.ErrorList {
+	var errs field.ErrorList
+
 	if r.Spec.Mode != AgentModeDaemon && r.Spec.Mode != AgentModeTask {
-		allErrs = append(allErrs, field.Invalid(specPath.Child("mode"), r.Spec.Mode,
+		errs = append(errs, field.Invalid(specPath.Child("mode"), r.Spec.Mode,
 			"must be 'daemon' or 'task'"))
 	}
 
-	// Task mode restrictions
 	if r.Spec.Mode == AgentModeTask {
 		if r.Spec.Storage != nil {
-			allErrs = append(allErrs, field.Forbidden(specPath.Child("storage"),
+			errs = append(errs, field.Forbidden(specPath.Child("storage"),
 				"storage is not allowed for task-mode agents"))
 		}
 		if r.Spec.Compaction != nil {
-			allErrs = append(allErrs, field.Forbidden(specPath.Child("compaction"),
+			errs = append(errs, field.Forbidden(specPath.Child("compaction"),
 				"compaction is daemon-only"))
 		}
 	}
 
+	return errs
+}
+
+func (r *Agent) validateProviderAndTools(specPath *field.Path) (field.ErrorList, admission.Warnings) {
+	var errs field.ErrorList
+
 	// Providers required
 	if len(r.Spec.Providers) == 0 {
-		allErrs = append(allErrs, field.Required(specPath.Child("providers"),
+		errs = append(errs, field.Required(specPath.Child("providers"),
 			"all agents need at least one LLM provider"))
 	}
 
 	// At least one tool source
 	if len(r.Spec.ToolRefs) == 0 && len(r.Spec.BuiltinTools) == 0 {
-		allErrs = append(allErrs, field.Required(specPath.Child("toolRefs"),
+		errs = append(errs, field.Required(specPath.Child("toolRefs"),
 			"agents need at least one tool (builtinTools or toolRefs)"))
 	}
 
 	// Validate builtinTools names
 	for i, tool := range r.Spec.BuiltinTools {
 		if !validBuiltinTools[tool] {
-			allErrs = append(allErrs, field.Invalid(
+			errs = append(errs, field.Invalid(
 				specPath.Child("builtinTools").Index(i), tool,
 				fmt.Sprintf("valid names are: read, bash, edit, write, grep, find, ls")))
 		}
@@ -117,7 +142,7 @@ func (r *Agent) validate() (admission.Warnings, error) {
 
 	// Schedule requires schedulePrompt
 	if r.Spec.Schedule != "" && r.Spec.SchedulePrompt == "" {
-		allErrs = append(allErrs, field.Required(specPath.Child("schedulePrompt"),
+		errs = append(errs, field.Required(specPath.Child("schedulePrompt"),
 			"schedulePrompt is required when schedule is set"))
 	}
 
@@ -130,7 +155,7 @@ func (r *Agent) validate() (admission.Warnings, error) {
 		parts := strings.SplitN(model, "/", 2)
 		if len(parts) == 2 {
 			if !providerNames[parts[0]] {
-				allErrs = append(allErrs, field.Invalid(
+				errs = append(errs, field.Invalid(
 					specPath.Child("fallbackModels").Index(i), model,
 					fmt.Sprintf("provider %q is not configured in providers", parts[0])))
 			}
@@ -141,41 +166,55 @@ func (r *Agent) validate() (admission.Warnings, error) {
 	if r.Spec.Compaction != nil {
 		validStrategies := map[string]bool{"auto": true, "manual": true, "off": true, "": true}
 		if !validStrategies[r.Spec.Compaction.Strategy] {
-			allErrs = append(allErrs, field.Invalid(
+			errs = append(errs, field.Invalid(
 				specPath.Child("compaction").Child("strategy"), r.Spec.Compaction.Strategy,
 				"must be auto, manual, or off"))
 		}
 	}
 
-	// ToolHooks: allowedPaths must be absolute
-	if r.Spec.ToolHooks != nil {
-		for i, p := range r.Spec.ToolHooks.AllowedPaths {
-			if !filepath.IsAbs(p) {
-				allErrs = append(allErrs, field.Invalid(
-					specPath.Child("toolHooks").Child("allowedPaths").Index(i), p,
-					"must be an absolute path"))
-			}
-		}
+	return errs, nil
+}
 
-		// Warn (non-blocking) if auditTools references unknown tools
-		knownTools := make(map[string]bool)
-		for _, bt := range r.Spec.BuiltinTools {
-			knownTools[bt] = true
-		}
-		for _, tr := range r.Spec.ToolRefs {
-			knownTools[tr.Name] = true
-		}
-		knownTools["run_agent"] = true
-		knownTools["get_agent_run"] = true
-		for _, at := range r.Spec.ToolHooks.AuditTools {
-			if !knownTools[at] {
-				warnings = append(warnings,
-					fmt.Sprintf("toolHooks.auditTools: %q is not a known tool name", at))
-			}
+func (r *Agent) validateToolHooks(specPath *field.Path) (field.ErrorList, admission.Warnings) {
+	var errs field.ErrorList
+	var warnings admission.Warnings
+
+	if r.Spec.ToolHooks == nil {
+		return errs, warnings
+	}
+
+	// allowedPaths must be absolute
+	for i, p := range r.Spec.ToolHooks.AllowedPaths {
+		if !filepath.IsAbs(p) {
+			errs = append(errs, field.Invalid(
+				specPath.Child("toolHooks").Child("allowedPaths").Index(i), p,
+				"must be an absolute path"))
 		}
 	}
 
-	// ResourceRef validation (exactly one source)
+	// Warn (non-blocking) if auditTools references unknown tools
+	knownTools := make(map[string]bool)
+	for _, bt := range r.Spec.BuiltinTools {
+		knownTools[bt] = true
+	}
+	for _, tr := range r.Spec.ToolRefs {
+		knownTools[tr.Name] = true
+	}
+	knownTools["run_agent"] = true
+	knownTools["get_agent_run"] = true
+	for _, at := range r.Spec.ToolHooks.AuditTools {
+		if !knownTools[at] {
+			warnings = append(warnings,
+				fmt.Sprintf("toolHooks.auditTools: %q is not a known tool name", at))
+		}
+	}
+
+	return errs, warnings
+}
+
+func (r *Agent) validateResourceRefs(specPath *field.Path) field.ErrorList {
+	var errs field.ErrorList
+
 	for i, tr := range r.Spec.ToolRefs {
 		sources := 0
 		if tr.OCIRef != nil {
@@ -188,17 +227,11 @@ func (r *Agent) validate() (admission.Warnings, error) {
 			sources++
 		}
 		if sources != 1 {
-			allErrs = append(allErrs, field.Invalid(
+			errs = append(errs, field.Invalid(
 				specPath.Child("toolRefs").Index(i), tr.Name,
 				"exactly one of ociRef, configMapRef, or content must be set"))
 		}
 	}
 
-	if len(allErrs) > 0 {
-		return warnings, apierrors.NewInvalid(
-			schema.GroupKind{Group: GroupVersion.Group, Kind: "Agent"},
-			r.Name, allErrs)
-	}
-
-	return warnings, nil
+	return errs
 }
