@@ -464,9 +464,9 @@ func buildPiCommand(agent *agentsv1alpha1.Agent, taskMode bool) ([]string, []str
 
 func buildFantasyCommand(taskMode bool) ([]string, []string) {
 	if taskMode {
-		return []string{"/app/agent-runtime", "task"}, nil
+		return []string{"/app/agent-runtime", "task"}, []string{}
 	}
-	return []string{"/app/agent-runtime", "daemon"}, nil
+	return []string{"/app/agent-runtime", "daemon"}, []string{}
 }
 
 // ====================================================================

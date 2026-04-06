@@ -99,19 +99,19 @@ type SkillEntry struct {
 
 // FantasyExtensionConfig is the JSON structure mounted at /etc/operator/config.json for Fantasy runtime.
 type FantasyExtensionConfig struct {
-	Runtime         string           `json:"runtime"`
-	Providers       []ProviderEntry  `json:"providers"`
-	PrimaryModel    string           `json:"primaryModel"`
-	FallbackModels  []string         `json:"fallbackModels,omitempty"`
-	SystemPrompt    string           `json:"systemPrompt,omitempty"`
-	BuiltinTools    []string         `json:"builtinTools,omitempty"`
-	Tools           []ToolEntry      `json:"tools"`
-	MCPServers      []MCPEntry       `json:"mcpServers,omitempty"`
-	ToolHooks       *ToolHooksEntry  `json:"toolHooks,omitempty"`
-	ContextFiles    []ContextEntry   `json:"contextFiles,omitempty"`
-	Temperature     *float64         `json:"temperature,omitempty"`
-	MaxOutputTokens *int64           `json:"maxOutputTokens,omitempty"`
-	MaxSteps        *int             `json:"maxSteps,omitempty"`
+	Runtime         string          `json:"runtime"`
+	Providers       []ProviderEntry `json:"providers"`
+	PrimaryModel    string          `json:"primaryModel"`
+	FallbackModels  []string        `json:"fallbackModels,omitempty"`
+	SystemPrompt    string          `json:"systemPrompt,omitempty"`
+	BuiltinTools    []string        `json:"builtinTools,omitempty"`
+	Tools           []ToolEntry     `json:"tools"`
+	MCPServers      []MCPEntry      `json:"mcpServers,omitempty"`
+	ToolHooks       *ToolHooksEntry `json:"toolHooks,omitempty"`
+	ContextFiles    []ContextEntry  `json:"contextFiles,omitempty"`
+	Temperature     *float64        `json:"temperature,omitempty"`
+	MaxOutputTokens *int64          `json:"maxOutputTokens,omitempty"`
+	MaxSteps        *int            `json:"maxSteps,omitempty"`
 }
 
 // ====================================================================

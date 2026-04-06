@@ -22,9 +22,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func boolPtr(b bool) *bool       { return &b }
+func boolPtr(b bool) *bool          { return &b }
 func float64Ptr(f float64) *float64 { return &f }
-func intPtr(i int) *int           { return &i }
+func intPtr(i int) *int             { return &i }
 
 func validPiAgent() *Agent {
 	return &Agent{
@@ -317,8 +317,8 @@ func TestValidate_ToolRef_MultipleSourcesInvalid(t *testing.T) {
 	agent := validPiAgent()
 	agent.Spec.ToolRefs = []ResourceRef{
 		{
-			Name:   "bad-tool",
-			OCIRef: &OCIRef{Ref: "ghcr.io/test:1.0"},
+			Name:         "bad-tool",
+			OCIRef:       &OCIRef{Ref: "ghcr.io/test:1.0"},
 			ConfigMapRef: &SecretKeyRef{Name: "cm", Key: "k"},
 		},
 	}
