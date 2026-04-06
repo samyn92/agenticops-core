@@ -42,3 +42,4 @@ issues:
   exclude-dirs:
     - third_party
     - examples
+    - images

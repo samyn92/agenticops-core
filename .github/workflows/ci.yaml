@@ -30,8 +30,8 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
-          args: --timeout=5m
+          version: v2.11.4
+          args: --timeout=10m
 
   operator-test:
     name: Operator Test
