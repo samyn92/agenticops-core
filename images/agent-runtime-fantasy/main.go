@@ -16,9 +16,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"charm.land/fantasy"
 )
@@ -291,10 +293,16 @@ func runDaemon() error {
 	}
 	defer shutdownMCPConnections(bundle.mcpConns)
 
+	// Session data directory: /data/sessions by default, override with DATA_DIR env var.
+	sessionDir := "/data/sessions"
+	if d := os.Getenv("DATA_DIR"); d != "" {
+		sessionDir = filepath.Join(d, "sessions")
+	}
+
 	srv := &daemonServer{
 		bundle:      bundle,
 		cfg:         cfg,
-		sessions:    NewSessionStore(),
+		sessions:    NewSessionStore(sessionDir),
 		activeModel: cfg.PrimaryModel,
 		sessionCtx:  make(map[string]*sessionContext),
 	}
@@ -1020,12 +1028,17 @@ const legacySessionID = "__legacy__"
 func (s *daemonServer) ensureLegacySession() {
 	if _, ok := s.sessions.Get(legacySessionID); !ok {
 		// Manually create since we need a fixed ID
-		s.sessions.mu.Lock()
-		s.sessions.sessions[legacySessionID] = &Session{
-			ID:       legacySessionID,
-			Title:    "Legacy Session",
-			Messages: []fantasy.Message{},
+		now := time.Now()
+		sess := &Session{
+			ID:        legacySessionID,
+			Title:     "Legacy Session",
+			Messages:  []fantasy.Message{},
+			CreatedAt: now,
+			UpdatedAt: now,
 		}
+		s.sessions.mu.Lock()
+		s.sessions.sessions[legacySessionID] = sess
+		s.sessions.persist(sess)
 		s.sessions.mu.Unlock()
 	}
 }
