@@ -440,6 +440,7 @@ func runDaemon() error {
 	mux.HandleFunc("POST /sessions", srv.handleSessionCreate)
 	mux.HandleFunc("GET /sessions", srv.handleSessionList)
 	mux.HandleFunc("GET /sessions/{id}", srv.handleSessionGet)
+	mux.HandleFunc("GET /sessions/{id}/messages", srv.handleSessionMessages)
 	mux.HandleFunc("DELETE /sessions/{id}", srv.handleSessionDelete)
 
 	// Session-scoped prompt/stream
@@ -592,6 +593,18 @@ func (s *daemonServer) handleSessionGet(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(session.Info())
+}
+
+func (s *daemonServer) handleSessionMessages(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	msgs, ok := s.sessions.GetSerializedMessages(id)
+	if !ok {
+		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(msgs)
 }
 
 func (s *daemonServer) handleSessionDelete(w http.ResponseWriter, r *http.Request) {

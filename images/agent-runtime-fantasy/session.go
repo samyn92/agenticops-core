@@ -407,6 +407,22 @@ func (ss *SessionStore) GetMessages(id string) []fantasy.Message {
 	return out
 }
 
+// GetSerializedMessages returns the message history as JSON-safe serializable structs.
+// This is used by the HTTP API to return messages without losing interface type info.
+func (ss *SessionStore) GetSerializedMessages(id string) ([]serializableMessage, bool) {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+	s, ok := ss.sessions[id]
+	if !ok {
+		return nil, false
+	}
+	out := make([]serializableMessage, len(s.Messages))
+	for i, msg := range s.Messages {
+		out[i] = serializeMessage(msg)
+	}
+	return out, true
+}
+
 // UpdateTitle changes the title of a session.
 func (ss *SessionStore) UpdateTitle(id string, title string) {
 	ss.mu.Lock()
