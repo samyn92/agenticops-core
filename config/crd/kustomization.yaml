@@ -4,9 +4,9 @@
 resources:
 - bases/agents.agentops.io_agents.yaml
 - bases/agents.agentops.io_agentresources.yaml
+- bases/agents.agentops.io_agenttools.yaml
 - bases/agents.agentops.io_channels.yaml
 - bases/agents.agentops.io_agentruns.yaml
-- bases/agents.agentops.io_mcpservers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
