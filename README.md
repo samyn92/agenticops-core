@@ -1,6 +1,6 @@
 # agentops-core
 
-Kubernetes operator and agent runtime for running AI coding agents as native Kubernetes workloads. Agents run the [Pi SDK](https://github.com/badlogic/pi-mono) inside containers, with the operator managing their full lifecycle: deployments, jobs, storage, MCP server bindings, channel bridges, and concurrency control.
+Kubernetes operator for running AI agents as native Kubernetes workloads. The operator manages the full lifecycle of agents — deployments, jobs, storage, MCP server bindings, channel bridges, and concurrency control. Agents run the [Fantasy](https://github.com/charmbracelet/fantasy) SDK (Go) inside containers, with the runtime maintained in the separate [`agentops-runtime-fantasy`](https://github.com/samyn92/agentops-runtime-fantasy) repo.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ EXTERNAL                       OPERATOR (reconciles)                     KUBERNE
   Slack    ──┤  Channel CRs   │  Channel Bridge   │  HTTP POST /prompt   
   Discord  ──┤──────────────► │  (Deployment)     │─────────────────────► Agent (daemon)
              │  chat types    │                   │                       Deployment + PVC + Service
-             │  forward msgs  └──────────────────┘                       Pi SDK + HTTP server (:4096)
+             │  forward msgs  └──────────────────┘                       Fantasy SDK + HTTP server (:4096)
              │  directly                                                  ├── /prompt
   GitLab  ───┤                                                            ├── /prompt/stream
   GitHub  ───┤  event types   ┌──────────────────┐                       ├── /steer, /followup, /abort
@@ -32,7 +32,7 @@ EXTERNAL                       OPERATOR (reconciles)                     KUBERNE
                                                         │ task agent?      │
                                                         │   → create Job   │──► Agent (task)
                                                         │                  │    Job (one-shot)
-                                                        │ daemon agent?    │    Pi SDK, exits
+                                                        │ daemon agent?    │    Fantasy SDK, exits
                                                         │   → HTTP POST    │──► Agent (daemon)
                                                         │     /prompt      │    (already running)
                                                         └──────────────────┘
@@ -44,19 +44,14 @@ EXTERNAL                       OPERATOR (reconciles)                     KUBERNE
                                └──────────────────┘
 ```
 
-### Data flow summary
+### Data flow
 
 | Source | Target Agent Mode | Path |
-|--------|:---:|------|
-| Chat channel (Telegram/Slack/Discord) | daemon | Channel bridge → HTTP POST → Agent Service |
-| Event channel (GitLab/GitHub/Webhook) | daemon or task | Channel bridge → AgentRun CR → Reconciler |
-| `run_agent` tool | daemon or task | Daemon agent → AgentRun CR → Reconciler |
-| Cron schedule | daemon or task | Operator → AgentRun CR → Reconciler |
-
-### Two components in this repo
-
-1. **Operator** (Go) — watches 4 CRDs and reconciles Kubernetes resources
-2. **Agent Runtime** (TypeScript) — runs inside agent pods, wraps Pi SDK
+|--------|:-----------------:|------|
+| Chat channel (Telegram/Slack/Discord) | daemon | Channel bridge -> HTTP POST -> Agent Service |
+| Event channel (GitLab/GitHub/Webhook) | daemon or task | Channel bridge -> AgentRun CR -> Reconciler |
+| `run_agent` tool | daemon or task | Daemon agent -> AgentRun CR -> Reconciler |
+| Cron schedule | daemon or task | Operator -> AgentRun CR -> Reconciler |
 
 ## Custom Resource Definitions
 
@@ -72,29 +67,57 @@ EXTERNAL                       OPERATOR (reconciles)                     KUBERNE
 - **`daemon`** — long-running Deployment + PVC + Service. Receives prompts via HTTP (`/prompt`, `/prompt/stream`, `/steer`, `/followup`, `/abort`). Supports session compaction.
 - **`task`** — one-shot Job per AgentRun. Prompt in, structured result out, container exits.
 
+### Agent spec highlights
+
+| Field Group | Key Fields |
+|-------------|------------|
+| Runtime | `image`, `builtinTools`, `temperature`, `maxOutputTokens`, `maxSteps` |
+| Model | `model`, `primaryProvider`, `titleModel`, `providers`, `fallbackModels` |
+| Identity | `systemPrompt`, `contextFiles` |
+| Tools | `toolRefs` (OCI / ConfigMap / inline MCP), `permissionTools`, `enableQuestionTool` |
+| MCP Servers | `mcpServers` (shared MCPServer bindings with per-agent permissions) |
+| Tool Hooks | `toolHooks` (blocked commands, allowed paths, audit tools) |
+| Schedule | `schedule` (cron), `schedulePrompt` |
+| Concurrency | `concurrency.maxRuns`, `concurrency.policy` |
+| Storage | `storage` (PVC for daemon agents) |
+| Infrastructure | `resources`, `serviceAccountName`, `timeout`, `networkPolicy` |
+
 ## Project Structure
 
 ```
 agentops-core/
-  api/v1alpha1/           # CRD types (Agent, Channel, AgentRun, MCPServer)
+  api/v1alpha1/              # CRD types (Agent, Channel, AgentRun, MCPServer) + webhooks
+  cmd/main.go                # Operator entrypoint (--enable-webhooks flag)
   internal/
-    controller/           # 4 reconcilers
-    resources/            # Kubernetes resource builders (Deployments, Jobs, PVCs, etc.)
-  images/agent-runtime/   # TypeScript agent runtime (Pi SDK wrapper)
+    controller/              # 4 reconcilers (agent, agentrun, channel, mcpserver)
+    resources/               # Kubernetes resource builders (deployments, jobs, PVCs, etc.)
+  images/
+    mcp-gateway/             # MCP protocol gateway (spawn + proxy modes)
   config/
-    crd/bases/            # Generated CRD YAMLs
-    rbac/                 # Generated RBAC
-    manager/              # Operator Deployment
-    webhook/              # Webhook configuration
-    samples/              # Example CRs
-  cmd/main.go             # Operator entrypoint
-  Dockerfile              # Operator image
+    crd/bases/               # Generated CRD YAMLs
+    rbac/                    # Generated RBAC
+    manager/                 # Operator Deployment manifest
+    webhook/                 # Webhook configuration
+    samples/                 # Example CRs
+  hack/
+    dev/                     # Dev pod manifest + init script
+  Dockerfile                 # Operator image
+  Makefile                   # Build, generate, deploy targets
 ```
+
+## Related Repos
+
+| Repo | Purpose |
+|------|---------|
+| [`agentops-runtime-fantasy`](https://github.com/samyn92/agentops-runtime-fantasy) | Fantasy agent runtime (Go, Charm Fantasy SDK) |
+| `agent-channels` | Channel bridge images (gitlab, webhook, etc.) |
+| `agent-tools` | OCI tool/agent packaging CLI + tool packages |
+| `agent-console` | Web console |
+| `agent-factory` | Helm chart (future) |
 
 ## Prerequisites
 
-- Go 1.25+
-- Node.js 22+ (for agent-runtime)
+- Go 1.26+
 - Docker
 - kubectl
 - Access to a Kubernetes cluster (v1.28+)
@@ -107,10 +130,16 @@ agentops-core/
 make install
 ```
 
-### Run the operator locally (development)
+### Run the operator locally
 
 ```sh
 make run
+```
+
+Webhooks are disabled by default. To enable them (requires cert-manager or manual TLS):
+
+```sh
+make run ARGS="--enable-webhooks"
 ```
 
 ### Deploy to a cluster
@@ -118,12 +147,6 @@ make run
 ```sh
 make docker-build docker-push IMG=ghcr.io/samyn92/agentops-core:latest
 make deploy IMG=ghcr.io/samyn92/agentops-core:latest
-```
-
-### Apply sample resources
-
-```sh
-kubectl apply -k config/samples/
 ```
 
 ### Create a minimal agent
@@ -136,6 +159,7 @@ metadata:
 spec:
   mode: daemon
   model: anthropic/claude-sonnet-4-20250514
+  primaryProvider: anthropic
   providers:
     - name: anthropic
       apiKeySecret:
@@ -162,29 +186,56 @@ spec:
   prompt: "List all files in the workspace"
 ```
 
+### Apply sample resources
+
+```sh
+kubectl apply -k config/samples/
+```
+
+## Development
+
+### Using the dev pod (recommended)
+
+The dev pod runs in-cluster on k3s with your source code mounted via hostPath. See [`hack/dev/dev-pod.yaml`](hack/dev/dev-pod.yaml) for the full setup.
+
+```sh
+# Deploy the dev pod
+kubectl apply -f hack/dev/dev-pod.yaml
+
+# Shell in
+kubectl exec -it -n agent-system deploy/agentops-dev -- bash
+
+# Inside the pod:
+make generate       # regen deepcopy
+make manifests      # regen CRD + RBAC manifests
+make install        # apply CRDs to cluster
+make run            # run operator
+```
+
+### Local development
+
+```sh
+make generate       # Generate DeepCopy methods
+make manifests      # Generate CRD, RBAC, Webhook manifests
+go build ./...      # Build
+make test           # Run tests (envtest)
+make lint           # Run golangci-lint
+```
+
+## Images
+
+| Image | Source | Purpose |
+|-------|--------|---------|
+| `ghcr.io/samyn92/agentops-operator` | `Dockerfile` (repo root) | Kubernetes operator |
+| `ghcr.io/samyn92/agent-runtime-fantasy` | [`agentops-runtime-fantasy`](https://github.com/samyn92/agentops-runtime-fantasy) repo | Fantasy SDK agent runtime |
+| `ghcr.io/samyn92/mcp-gateway` | `images/mcp-gateway/` | MCP protocol gateway (spawn + proxy modes) |
+
 ## Uninstall
 
 ```sh
 kubectl delete -k config/samples/
 make undeploy
 make uninstall
-```
-
-## Development
-
-```sh
-# Generate deepcopy and CRD manifests
-make generate
-make manifests
-
-# Build
-go build ./...
-
-# Lint
-golangci-lint run
-
-# Build agent runtime
-cd images/agent-runtime && npm install && npm run build
 ```
 
 ## License
