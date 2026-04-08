@@ -280,66 +280,7 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 			ReadOnly:    binding.ReadOnly,
 			AutoContext: binding.AutoContext,
 		}
-
-		// Map kind-specific config
-		switch res.Spec.Kind {
-		case agentsv1alpha1.AgentResourceKindGitHubRepo:
-			if res.Spec.GitHub != nil {
-				entry.GitHub = &AgentResourceGitHubEntry{
-					Owner:         res.Spec.GitHub.Owner,
-					Repo:          res.Spec.GitHub.Repo,
-					DefaultBranch: res.Spec.GitHub.DefaultBranch,
-					APIURL:        res.Spec.GitHub.APIURL,
-				}
-			}
-		case agentsv1alpha1.AgentResourceKindGitHubOrg:
-			if res.Spec.GitHubOrg != nil {
-				entry.GitHubOrg = &AgentResourceGitHubOrgEntry{
-					Org:        res.Spec.GitHubOrg.Org,
-					RepoFilter: res.Spec.GitHubOrg.RepoFilter,
-					APIURL:     res.Spec.GitHubOrg.APIURL,
-				}
-			}
-		case agentsv1alpha1.AgentResourceKindGitLabProject:
-			if res.Spec.GitLab != nil {
-				entry.GitLab = &AgentResourceGitLabEntry{
-					BaseURL:       res.Spec.GitLab.BaseURL,
-					Project:       res.Spec.GitLab.Project,
-					DefaultBranch: res.Spec.GitLab.DefaultBranch,
-				}
-			}
-		case agentsv1alpha1.AgentResourceKindGitLabGroup:
-			if res.Spec.GitLabGroup != nil {
-				entry.GitLabGroup = &AgentResourceGitLabGroupEntry{
-					BaseURL:  res.Spec.GitLabGroup.BaseURL,
-					Group:    res.Spec.GitLabGroup.Group,
-					Projects: res.Spec.GitLabGroup.Projects,
-				}
-			}
-		case agentsv1alpha1.AgentResourceKindGitRepo:
-			if res.Spec.Git != nil {
-				entry.Git = &AgentResourceGitEntry{
-					URL:    res.Spec.Git.URL,
-					Branch: res.Spec.Git.Branch,
-				}
-			}
-		case agentsv1alpha1.AgentResourceKindS3Bucket:
-			if res.Spec.S3 != nil {
-				entry.S3 = &AgentResourceS3Entry{
-					Bucket:   res.Spec.S3.Bucket,
-					Region:   res.Spec.S3.Region,
-					Endpoint: res.Spec.S3.Endpoint,
-					Prefix:   res.Spec.S3.Prefix,
-				}
-			}
-		case agentsv1alpha1.AgentResourceKindDocumentation:
-			if res.Spec.Documentation != nil {
-				entry.Documentation = &AgentResourceDocumentationEntry{
-					URLs: res.Spec.Documentation.URLs,
-				}
-			}
-		}
-
+		mapAgentResourceKind(&entry, &res)
 		config.Resources = append(config.Resources, entry)
 	}
 
@@ -358,6 +299,69 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 			"config.json": string(data),
 		},
 	}, nil
+}
+
+// mapAgentResourceKind populates the kind-specific fields of an AgentResourceEntry
+// based on the AgentResource spec. Extracted to reduce cyclomatic complexity of
+// BuildAgentConfigMap.
+func mapAgentResourceKind(entry *AgentResourceEntry, res *agentsv1alpha1.AgentResource) {
+	switch res.Spec.Kind {
+	case agentsv1alpha1.AgentResourceKindGitHubRepo:
+		if res.Spec.GitHub != nil {
+			entry.GitHub = &AgentResourceGitHubEntry{
+				Owner:         res.Spec.GitHub.Owner,
+				Repo:          res.Spec.GitHub.Repo,
+				DefaultBranch: res.Spec.GitHub.DefaultBranch,
+				APIURL:        res.Spec.GitHub.APIURL,
+			}
+		}
+	case agentsv1alpha1.AgentResourceKindGitHubOrg:
+		if res.Spec.GitHubOrg != nil {
+			entry.GitHubOrg = &AgentResourceGitHubOrgEntry{
+				Org:        res.Spec.GitHubOrg.Org,
+				RepoFilter: res.Spec.GitHubOrg.RepoFilter,
+				APIURL:     res.Spec.GitHubOrg.APIURL,
+			}
+		}
+	case agentsv1alpha1.AgentResourceKindGitLabProject:
+		if res.Spec.GitLab != nil {
+			entry.GitLab = &AgentResourceGitLabEntry{
+				BaseURL:       res.Spec.GitLab.BaseURL,
+				Project:       res.Spec.GitLab.Project,
+				DefaultBranch: res.Spec.GitLab.DefaultBranch,
+			}
+		}
+	case agentsv1alpha1.AgentResourceKindGitLabGroup:
+		if res.Spec.GitLabGroup != nil {
+			entry.GitLabGroup = &AgentResourceGitLabGroupEntry{
+				BaseURL:  res.Spec.GitLabGroup.BaseURL,
+				Group:    res.Spec.GitLabGroup.Group,
+				Projects: res.Spec.GitLabGroup.Projects,
+			}
+		}
+	case agentsv1alpha1.AgentResourceKindGitRepo:
+		if res.Spec.Git != nil {
+			entry.Git = &AgentResourceGitEntry{
+				URL:    res.Spec.Git.URL,
+				Branch: res.Spec.Git.Branch,
+			}
+		}
+	case agentsv1alpha1.AgentResourceKindS3Bucket:
+		if res.Spec.S3 != nil {
+			entry.S3 = &AgentResourceS3Entry{
+				Bucket:   res.Spec.S3.Bucket,
+				Region:   res.Spec.S3.Region,
+				Endpoint: res.Spec.S3.Endpoint,
+				Prefix:   res.Spec.S3.Prefix,
+			}
+		}
+	case agentsv1alpha1.AgentResourceKindDocumentation:
+		if res.Spec.Documentation != nil {
+			entry.Documentation = &AgentResourceDocumentationEntry{
+				URLs: res.Spec.Documentation.URLs,
+			}
+		}
+	}
 }
 
 // resolveMemoryServerURL determines the HTTP URL for the memory (Engram) server.

@@ -372,15 +372,15 @@ func (r *AgentReconciler) resolveAgentTools(ctx context.Context, agent *agentsv1
 
 // resolveAgentResources fetches all AgentResource CRs referenced by the agent.
 func (r *AgentReconciler) resolveAgentResources(ctx context.Context, agent *agentsv1alpha1.Agent) ([]agentsv1alpha1.AgentResource, error) {
-	resources := make([]agentsv1alpha1.AgentResource, 0, len(agent.Spec.ResourceBindings))
+	agentRes := make([]agentsv1alpha1.AgentResource, 0, len(agent.Spec.ResourceBindings))
 	for _, binding := range agent.Spec.ResourceBindings {
 		res := &agentsv1alpha1.AgentResource{}
 		if err := r.Get(ctx, types.NamespacedName{Name: binding.Name, Namespace: agent.Namespace}, res); err != nil {
 			return nil, fmt.Errorf("AgentResource %q not found: %w", binding.Name, err)
 		}
-		resources = append(resources, *res)
+		agentRes = append(agentRes, *res)
 	}
-	return resources, nil
+	return agentRes, nil
 }
 
 // validateAgentToolsReady checks all referenced AgentTools are in Ready phase.
@@ -394,8 +394,8 @@ func (r *AgentReconciler) validateAgentToolsReady(tools []agentsv1alpha1.AgentTo
 }
 
 // validateAgentResourcesReady checks all referenced AgentResources are in Ready phase.
-func (r *AgentReconciler) validateAgentResourcesReady(resources []agentsv1alpha1.AgentResource) error {
-	for _, res := range resources {
+func (r *AgentReconciler) validateAgentResourcesReady(agentRes []agentsv1alpha1.AgentResource) error {
+	for _, res := range agentRes {
 		if res.Status.Phase != agentsv1alpha1.AgentResourcePhaseReady {
 			return fmt.Errorf("AgentResource %q is not Ready (phase: %s)", res.Name, res.Status.Phase)
 		}
