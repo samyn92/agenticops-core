@@ -278,6 +278,8 @@ type AgentConfig struct {
 	Temperature        *float64             `json:"temperature,omitempty"`
 	MaxOutputTokens    *int64               `json:"maxOutputTokens,omitempty"`
 	MaxSteps           *int                 `json:"maxSteps,omitempty"`
+	MaxToolResultChars int                  `json:"maxToolResultChars,omitempty"`
+	BudgetFraction     *float64             `json:"budgetFraction,omitempty"`
 	PermissionTools    []string             `json:"permissionTools,omitempty"`
 	EnableQuestionTool bool                 `json:"enableQuestionTool,omitempty"`
 	Resources          []AgentResourceEntry `json:"resources,omitempty"`
