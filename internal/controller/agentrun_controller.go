@@ -282,8 +282,38 @@ func (r *AgentRunReconciler) reconcileTaskRun(ctx context.Context, run *agentsv1
 			gitCfg = resolved
 		}
 
+		// Create a per-run ConfigMap with git MCP server entries if needed
+		runConfigMapName := ""
+		if gitCfg != nil {
+			// Get the base agent ConfigMap
+			baseConfigMap := &corev1.ConfigMap{}
+			if err := r.Get(ctx, types.NamespacedName{
+				Name:      resources.ObjectName(agent.Name, "config"),
+				Namespace: run.Namespace,
+			}, baseConfigMap); err != nil {
+				return ctrl.Result{}, fmt.Errorf("get base config: %w", err)
+			}
+
+			// Count existing MCP sidecars to determine port offset
+			mcpCount := len(agentTools)
+			gitMCPServers := gitCfg.GitMCPServers(mcpCount)
+
+			runCM, err := resources.BuildAgentRunConfigMap(baseConfigMap, run.Name, gitMCPServers)
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("build run config: %w", err)
+			}
+			if err := controllerutil.SetControllerReference(run, runCM, r.Scheme); err != nil {
+				return ctrl.Result{}, err
+			}
+			if err := r.Create(ctx, runCM); err != nil {
+				return ctrl.Result{}, fmt.Errorf("create run config: %w", err)
+			}
+			runConfigMapName = runCM.Name
+			log.Info("Created per-run ConfigMap with git MCP servers", "configMap", runCM.Name)
+		}
+
 		// Create Job
-		job := resources.BuildAgentRunJob(run, agent, agentTools, gitCfg)
+		job := resources.BuildAgentRunJob(run, agent, agentTools, gitCfg, runConfigMapName)
 		if err := controllerutil.SetControllerReference(run, job, r.Scheme); err != nil {
 			return ctrl.Result{}, err
 		}

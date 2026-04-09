@@ -173,7 +173,7 @@ func TestBuildAgentRunJob(t *testing.T) {
 		},
 	}
 
-	job := BuildAgentRunJob(run, agent, nil, nil)
+	job := BuildAgentRunJob(run, agent, nil, nil, "")
 
 	main := job.Spec.Template.Spec.Containers[0]
 	if main.Command[0] != "/app/agent-runtime" || main.Command[1] != "task" {

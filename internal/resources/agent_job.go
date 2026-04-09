@@ -25,7 +25,8 @@ import (
 
 // BuildAgentRunJob creates a Job for a task-mode AgentRun.
 // gitCfg is optional — when non-nil, git workspace env vars and MCP tool sidecars are injected.
-func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.AgentTool, gitCfg *GitWorkspaceConfig) *batchv1.Job {
+// runConfigMapName overrides the operator config volume to use a per-run ConfigMap (empty = use agent default).
+func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.AgentTool, gitCfg *GitWorkspaceConfig, runConfigMapName string) *batchv1.Job {
 	labels := CommonLabels(agent.Name, "task-run")
 	labels["agents.agentops.io/run"] = run.Name
 
@@ -64,6 +65,16 @@ func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent,
 		podSpec.Containers = append(podSpec.Containers, gitCfg.GitToolSidecars(mcpCount)...)
 		podSpec.InitContainers = append(podSpec.InitContainers, gitCfg.GitToolInitContainers()...)
 		podSpec.Volumes = append(podSpec.Volumes, gitCfg.GitToolVolumes()...)
+	}
+
+	// Override the config volume to use a per-run ConfigMap if specified
+	if runConfigMapName != "" {
+		for i, vol := range podSpec.Volumes {
+			if vol.Name == VolumeConfig && vol.ConfigMap != nil {
+				podSpec.Volumes[i].ConfigMap.Name = runConfigMapName
+				break
+			}
+		}
 	}
 
 	// Never restart task pods (they succeed or fail)

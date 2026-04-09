@@ -452,6 +452,41 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 	}, nil
 }
 
+// BuildAgentRunConfigMap creates a per-run ConfigMap that extends the base agent
+// config with git MCP server entries. The runtime needs these to discover and
+// connect to the MCP gateway sidecars injected by the operator.
+func BuildAgentRunConfigMap(baseConfigMap *corev1.ConfigMap, runName string, gitMCPServers []MCPEntry) (*corev1.ConfigMap, error) {
+	configJSON := baseConfigMap.Data["config.json"]
+	var config AgentConfig
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		return nil, fmt.Errorf("unmarshal base config: %w", err)
+	}
+
+	config.MCPServers = append(config.MCPServers, gitMCPServers...)
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal run config: %w", err)
+	}
+
+	labels := make(map[string]string)
+	for k, v := range baseConfigMap.Labels {
+		labels[k] = v
+	}
+	labels["agents.agentops.io/run"] = runName
+
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      runName + "-config",
+			Namespace: baseConfigMap.Namespace,
+			Labels:    labels,
+		},
+		Data: map[string]string{
+			"config.json": string(data),
+		},
+	}, nil
+}
+
 // mapAgentResourceKind populates the kind-specific fields of an AgentResourceEntry
 // based on the AgentResource spec. Extracted to reduce cyclomatic complexity of
 // BuildAgentConfigMap.

@@ -305,3 +305,39 @@ func buildGatewayInitContainer(name, image, volumeName string) corev1.Container 
 		},
 	}
 }
+
+// GitMCPServers returns MCPEntry items for the runtime config so it knows
+// how to connect to the git MCP gateway sidecars.
+// startIndex must match the startIndex used in GitToolSidecars.
+func (g *GitWorkspaceConfig) GitMCPServers(startIndex int) []MCPEntry {
+	entries := []MCPEntry{
+		{
+			Name:        "git",
+			Port:        GatewayBasePort + startIndex,
+			Description: "Git operations — status, diff, log, add, commit, push, pull, branch, clone",
+			Category:    "git",
+			UIHint:      "git",
+		},
+	}
+
+	switch g.Provider {
+	case "github":
+		entries = append(entries, MCPEntry{
+			Name:        "github",
+			Port:        GatewayBasePort + startIndex + 1,
+			Description: "GitHub API — PRs, issues, branches, checks, workflows",
+			Category:    "git",
+			UIHint:      "github",
+		})
+	case "gitlab":
+		entries = append(entries, MCPEntry{
+			Name:        "gitlab",
+			Port:        GatewayBasePort + startIndex + 1,
+			Description: "GitLab API — MRs, issues, pipelines, projects",
+			Category:    "git",
+			UIHint:      "gitlab",
+		})
+	}
+
+	return entries
+}
