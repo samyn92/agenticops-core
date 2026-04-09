@@ -53,190 +53,248 @@ func reconcileOwnedResource(
 	desired client.Object,
 ) error {
 	key := client.ObjectKeyFromObject(desired)
-	log := ctrl.LoggerFrom(ctx)
 
 	switch d := desired.(type) {
 	case *appsv1.Deployment:
-		// Use Server-Side Apply for Deployments. SSA only manages fields
-		// explicitly set in the apply configuration, so API-server defaults
-		// (imagePullPolicy, terminationMessagePath, etc.) are never touched.
-		if err := controllerutil.SetControllerReference(owner, d, scheme); err != nil {
-			return fmt.Errorf("set owner ref on Deployment %s: %w", key, err)
-		}
-		// SSA requires GVK to be set on the object.
-		d.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind("Deployment"))
-		if err := c.Patch(ctx, d, client.Apply, client.FieldOwner(fieldManager), client.ForceOwnership); err != nil {
-			return fmt.Errorf("apply Deployment %s: %w", key, err)
-		}
-		log.V(1).Info("Applied Deployment (SSA)", "name", key.Name)
-		return nil
+		return reconcileDeploymentSSA(ctx, c, scheme, owner, d, key)
 
 	case *corev1.Service:
-		existing := &corev1.Service{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-
-			// Only update the fields we manage — preserve ClusterIP, SessionAffinity,
-			// IPFamilyPolicy, InternalTrafficPolicy and other API-server defaults.
-			existing.Spec.Selector = d.Spec.Selector
-			existing.Spec.Ports = d.Spec.Ports
-			if d.Spec.Type != "" {
-				existing.Spec.Type = d.Spec.Type
-			}
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile Service %s: %w", key, err)
-		}
-		log.V(1).Info("CreateOrUpdate Service", "name", key.Name, "result", result)
-		return nil
+		return reconcileService(ctx, c, scheme, owner, d, key)
 
 	case *corev1.ConfigMap:
-		existing := &corev1.ConfigMap{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-			existing.Data = d.Data
-			existing.BinaryData = d.BinaryData
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile ConfigMap %s: %w", key, err)
-		}
-		log.V(1).Info("CreateOrUpdate ConfigMap", "name", key.Name, "result", result)
-		return nil
+		return reconcileConfigMap(ctx, c, scheme, owner, d, key)
 
 	case *corev1.PersistentVolumeClaim:
-		existing := &corev1.PersistentVolumeClaim{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		_, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-			// PVC spec is mostly immutable after creation; only update labels/annotations
-			if existing.CreationTimestamp.IsZero() {
-				existing.Spec = d.Spec
-			}
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile PVC %s: %w", key, err)
-		}
-		return nil
+		return reconcilePVC(ctx, c, scheme, owner, d, key)
 
 	case *networkingv1.NetworkPolicy:
-		existing := &networkingv1.NetworkPolicy{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		_, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-			existing.Spec = d.Spec
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile NetworkPolicy %s: %w", key, err)
-		}
-		return nil
+		return reconcileNetworkPolicy(ctx, c, scheme, owner, d, key)
 
 	case *networkingv1.Ingress:
-		existing := &networkingv1.Ingress{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		_, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-			existing.Spec = d.Spec
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile Ingress %s: %w", key, err)
-		}
-		return nil
+		return reconcileIngress(ctx, c, scheme, owner, d, key)
 
 	case *corev1.ServiceAccount:
-		existing := &corev1.ServiceAccount{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile ServiceAccount %s: %w", key, err)
-		}
-		log.V(1).Info("CreateOrUpdate ServiceAccount", "name", key.Name, "result", result)
-		return nil
+		return reconcileServiceAccount(ctx, c, scheme, owner, d, key)
 
 	case *rbacv1.Role:
-		existing := &rbacv1.Role{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-			existing.Rules = d.Rules
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile Role %s: %w", key, err)
-		}
-		log.V(1).Info("CreateOrUpdate Role", "name", key.Name, "result", result)
-		return nil
+		return reconcileRole(ctx, c, scheme, owner, d, key)
 
 	case *rbacv1.RoleBinding:
-		existing := &rbacv1.RoleBinding{}
-		existing.Name = key.Name
-		existing.Namespace = key.Namespace
-		result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
-			if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
-				return err
-			}
-			existing.Labels = mergeLabels(existing.Labels, d.Labels)
-			existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
-			// RoleRef is immutable after creation; only set if new
-			if existing.CreationTimestamp.IsZero() {
-				existing.RoleRef = d.RoleRef
-			}
-			existing.Subjects = d.Subjects
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("reconcile RoleBinding %s: %w", key, err)
-		}
-		log.V(1).Info("CreateOrUpdate RoleBinding", "name", key.Name, "result", result)
-		return nil
+		return reconcileRoleBinding(ctx, c, scheme, owner, d, key)
 
 	default:
 		return fmt.Errorf("unsupported resource type %T", desired)
 	}
+}
+
+// reconcileDeploymentSSA applies a Deployment using Server-Side Apply.
+// SSA only manages fields explicitly set in the apply configuration, so
+// API-server defaults (imagePullPolicy, terminationMessagePath, etc.) are never touched.
+func reconcileDeploymentSSA(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *appsv1.Deployment, key client.ObjectKey,
+) error {
+	if err := controllerutil.SetControllerReference(owner, d, scheme); err != nil {
+		return fmt.Errorf("set owner ref on Deployment %s: %w", key, err)
+	}
+	d.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind("Deployment"))
+	if err := c.Patch(ctx, d, client.Apply, client.FieldOwner(fieldManager), client.ForceOwnership); err != nil {
+		return fmt.Errorf("apply Deployment %s: %w", key, err)
+	}
+	ctrl.LoggerFrom(ctx).V(1).Info("Applied Deployment (SSA)", "name", key.Name)
+	return nil
+}
+
+func reconcileService(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *corev1.Service, key client.ObjectKey,
+) error {
+	existing := &corev1.Service{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		existing.Spec.Selector = d.Spec.Selector
+		existing.Spec.Ports = d.Spec.Ports
+		if d.Spec.Type != "" {
+			existing.Spec.Type = d.Spec.Type
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile Service %s: %w", key, err)
+	}
+	ctrl.LoggerFrom(ctx).V(1).Info("CreateOrUpdate Service", "name", key.Name, "result", result)
+	return nil
+}
+
+func reconcileConfigMap(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *corev1.ConfigMap, key client.ObjectKey,
+) error {
+	existing := &corev1.ConfigMap{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		existing.Data = d.Data
+		existing.BinaryData = d.BinaryData
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile ConfigMap %s: %w", key, err)
+	}
+	ctrl.LoggerFrom(ctx).V(1).Info("CreateOrUpdate ConfigMap", "name", key.Name, "result", result)
+	return nil
+}
+
+func reconcilePVC(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *corev1.PersistentVolumeClaim, key client.ObjectKey,
+) error {
+	existing := &corev1.PersistentVolumeClaim{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	_, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		// PVC spec is mostly immutable after creation; only update labels/annotations
+		if existing.CreationTimestamp.IsZero() {
+			existing.Spec = d.Spec
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile PVC %s: %w", key, err)
+	}
+	return nil
+}
+
+func reconcileNetworkPolicy(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *networkingv1.NetworkPolicy, key client.ObjectKey,
+) error {
+	existing := &networkingv1.NetworkPolicy{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	_, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		existing.Spec = d.Spec
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile NetworkPolicy %s: %w", key, err)
+	}
+	return nil
+}
+
+func reconcileIngress(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *networkingv1.Ingress, key client.ObjectKey,
+) error {
+	existing := &networkingv1.Ingress{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	_, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		existing.Spec = d.Spec
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile Ingress %s: %w", key, err)
+	}
+	return nil
+}
+
+func reconcileServiceAccount(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *corev1.ServiceAccount, key client.ObjectKey,
+) error {
+	existing := &corev1.ServiceAccount{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile ServiceAccount %s: %w", key, err)
+	}
+	ctrl.LoggerFrom(ctx).V(1).Info("CreateOrUpdate ServiceAccount", "name", key.Name, "result", result)
+	return nil
+}
+
+func reconcileRole(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *rbacv1.Role, key client.ObjectKey,
+) error {
+	existing := &rbacv1.Role{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		existing.Rules = d.Rules
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile Role %s: %w", key, err)
+	}
+	ctrl.LoggerFrom(ctx).V(1).Info("CreateOrUpdate Role", "name", key.Name, "result", result)
+	return nil
+}
+
+func reconcileRoleBinding(
+	ctx context.Context, c client.Client, scheme *runtime.Scheme,
+	owner client.Object, d *rbacv1.RoleBinding, key client.ObjectKey,
+) error {
+	existing := &rbacv1.RoleBinding{}
+	existing.Name = key.Name
+	existing.Namespace = key.Namespace
+	result, err := controllerutil.CreateOrUpdate(ctx, c, existing, func() error {
+		if err := controllerutil.SetControllerReference(owner, existing, scheme); err != nil {
+			return err
+		}
+		existing.Labels = mergeLabels(existing.Labels, d.Labels)
+		existing.Annotations = mergeLabels(existing.Annotations, d.Annotations)
+		// RoleRef is immutable after creation; only set if new
+		if existing.CreationTimestamp.IsZero() {
+			existing.RoleRef = d.RoleRef
+		}
+		existing.Subjects = d.Subjects
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("reconcile RoleBinding %s: %w", key, err)
+	}
+	ctrl.LoggerFrom(ctx).V(1).Info("CreateOrUpdate RoleBinding", "name", key.Name, "result", result)
+	return nil
 }
 
 // mergeLabels merges desired labels into existing labels. Desired keys win.
