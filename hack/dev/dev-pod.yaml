@@ -108,4 +108,4 @@ spec:
             path: /home/samy/dev/github.com/samyn92/agentops-core
         - name: go-cache
           emptyDir:
-            sizeLimit: 2Gi
+            sizeLimit: 4Gi
