@@ -31,6 +31,11 @@ const (
 	GitToolImage    = "ghcr.io/samyn92/agent-tools/git-server:latest"
 	GitHubToolImage = "ghcr.io/samyn92/agent-tools/github-server:latest"
 	GitLabToolImage = "ghcr.io/samyn92/agent-tools/gitlab-server:latest"
+
+	// Git provider constants.
+	ProviderGitHub = "github"
+	ProviderGitLab = "gitlab"
+	ProviderGit    = "git"
 )
 
 // GitWorkspaceConfig holds resolved git workspace configuration for a task agent run.
@@ -73,7 +78,7 @@ func ResolveGitWorkspace(
 			return nil, fmt.Errorf("AgentResource %q kind is github-repo but spec.github is nil", resource.Name)
 		}
 		gh := resource.Spec.GitHub
-		cfg.Provider = "github"
+		cfg.Provider = ProviderGitHub
 		cfg.CloneURL = fmt.Sprintf("https://github.com/%s/%s.git", gh.Owner, gh.Repo)
 		cfg.GitHubOwner = gh.Owner
 		cfg.GitHubRepo = gh.Repo
@@ -91,7 +96,7 @@ func ResolveGitWorkspace(
 			return nil, fmt.Errorf("AgentResource %q kind is gitlab-project but spec.gitlab is nil", resource.Name)
 		}
 		gl := resource.Spec.GitLab
-		cfg.Provider = "gitlab"
+		cfg.Provider = ProviderGitLab
 		cfg.CloneURL = fmt.Sprintf("%s/%s.git", gl.BaseURL, gl.Project)
 		cfg.GitLabProject = gl.Project
 		cfg.GitLabBaseURL = gl.BaseURL
@@ -103,7 +108,7 @@ func ResolveGitWorkspace(
 		if resource.Spec.Git == nil {
 			return nil, fmt.Errorf("AgentResource %q kind is git-repo but spec.git is nil", resource.Name)
 		}
-		cfg.Provider = "git"
+		cfg.Provider = ProviderGit
 		cfg.CloneURL = resource.Spec.Git.URL
 		if cfg.BaseBranch == "" {
 			cfg.BaseBranch = resource.Spec.Git.Branch
@@ -133,7 +138,7 @@ func (g *GitWorkspaceConfig) GitEnvVars() []corev1.EnvVar {
 
 	// Provider-specific env vars for the MCP tools
 	switch g.Provider {
-	case "github":
+	case ProviderGitHub:
 		env = append(env,
 			corev1.EnvVar{Name: "GIT_OWNER", Value: g.GitHubOwner},
 			corev1.EnvVar{Name: "GIT_REPO", Value: g.GitHubRepo},
@@ -141,7 +146,7 @@ func (g *GitWorkspaceConfig) GitEnvVars() []corev1.EnvVar {
 		if g.GitHubAPIURL != "" {
 			env = append(env, corev1.EnvVar{Name: "GITHUB_API_URL", Value: g.GitHubAPIURL})
 		}
-	case "gitlab":
+	case ProviderGitLab:
 		env = append(env,
 			corev1.EnvVar{Name: "GIT_PROJECT", Value: g.GitLabProject},
 			corev1.EnvVar{Name: "GITLAB_URL", Value: g.GitLabBaseURL},
@@ -152,9 +157,9 @@ func (g *GitWorkspaceConfig) GitEnvVars() []corev1.EnvVar {
 	if g.Credentials != nil {
 		tokenEnvName := "GIT_TOKEN"
 		switch g.Provider {
-		case "github":
+		case ProviderGitHub:
 			tokenEnvName = "GH_TOKEN"
-		case "gitlab":
+		case ProviderGitLab:
 			tokenEnvName = "GITLAB_TOKEN"
 		}
 		env = append(env, corev1.EnvVar{
@@ -194,7 +199,7 @@ func (g *GitWorkspaceConfig) GitToolSidecars(startIndex int) []corev1.Container 
 
 	// Platform-specific MCP tool (for PR/MR creation)
 	switch g.Provider {
-	case "github":
+	case ProviderGitHub:
 		extra := []corev1.EnvVar{
 			{Name: "GH_TOKEN", ValueFrom: g.tokenEnvVarSource()},
 		}
@@ -203,7 +208,7 @@ func (g *GitWorkspaceConfig) GitToolSidecars(startIndex int) []corev1.Container 
 		}
 		sidecars = append(sidecars, buildGitMCPSidecar("github", GitHubToolImage, startIndex+1, extra))
 
-	case "gitlab":
+	case ProviderGitLab:
 		extra := []corev1.EnvVar{
 			{Name: "GITLAB_TOKEN", ValueFrom: g.tokenEnvVarSource()},
 			{Name: "GITLAB_URL", Value: g.GitLabBaseURL},
@@ -231,12 +236,13 @@ func (g *GitWorkspaceConfig) tokenEnvVarSource() *corev1.EnvVarSource {
 func buildGitMCPSidecar(name, image string, index int, extraEnv []corev1.EnvVar) corev1.Container {
 	port := int32(GatewayBasePort + index)
 
-	env := []corev1.EnvVar{
-		{Name: "GATEWAY_MODE", Value: "spawn"},
-		{Name: "GATEWAY_PORT", Value: fmt.Sprintf("%d", port)},
-		{Name: "GATEWAY_COMMAND", Value: fmt.Sprintf("mcp-%s", name)},
-		{Name: "WORKSPACE", Value: "/data/repo"},
-	}
+	env := make([]corev1.EnvVar, 0, 4+len(extraEnv))
+	env = append(env,
+		corev1.EnvVar{Name: "GATEWAY_MODE", Value: "spawn"},
+		corev1.EnvVar{Name: "GATEWAY_PORT", Value: fmt.Sprintf("%d", port)},
+		corev1.EnvVar{Name: "GATEWAY_COMMAND", Value: fmt.Sprintf("mcp-%s", name)},
+		corev1.EnvVar{Name: "WORKSPACE", Value: "/data/repo"},
+	)
 	env = append(env, extraEnv...)
 
 	gatewayVolume := fmt.Sprintf("gw-bin-%s", name)
@@ -267,11 +273,11 @@ func (g *GitWorkspaceConfig) GitToolVolumes() []corev1.Volume {
 		{Name: "gw-bin-git", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 	}
 	switch g.Provider {
-	case "github":
+	case ProviderGitHub:
 		volumes = append(volumes, corev1.Volume{
 			Name: "gw-bin-github", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 		})
-	case "gitlab":
+	case ProviderGitLab:
 		volumes = append(volumes, corev1.Volume{
 			Name: "gw-bin-gitlab", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 		})
@@ -283,18 +289,18 @@ func (g *GitWorkspaceConfig) GitToolVolumes() []corev1.Volume {
 // into the shared emptyDir volumes for the sidecars.
 func (g *GitWorkspaceConfig) GitToolInitContainers() []corev1.Container {
 	inits := []corev1.Container{
-		buildGatewayInitContainer("copy-gw-git", GitToolImage, "gw-bin-git"),
+		buildGatewayInitContainer("copy-gw-git", "gw-bin-git"),
 	}
 	switch g.Provider {
-	case "github":
-		inits = append(inits, buildGatewayInitContainer("copy-gw-github", GitHubToolImage, "gw-bin-github"))
-	case "gitlab":
-		inits = append(inits, buildGatewayInitContainer("copy-gw-gitlab", GitLabToolImage, "gw-bin-gitlab"))
+	case ProviderGitHub:
+		inits = append(inits, buildGatewayInitContainer("copy-gw-github", "gw-bin-github"))
+	case ProviderGitLab:
+		inits = append(inits, buildGatewayInitContainer("copy-gw-gitlab", "gw-bin-gitlab"))
 	}
 	return inits
 }
 
-func buildGatewayInitContainer(name, image, volumeName string) corev1.Container {
+func buildGatewayInitContainer(name, volumeName string) corev1.Container {
 	return corev1.Container{
 		Name:    name,
 		Image:   MCPGatewayImage,
@@ -321,7 +327,7 @@ func (g *GitWorkspaceConfig) GitMCPServers(startIndex int) []MCPEntry {
 	}
 
 	switch g.Provider {
-	case "github":
+	case ProviderGitHub:
 		entries = append(entries, MCPEntry{
 			Name:        "github",
 			Port:        GatewayBasePort + startIndex + 1,
@@ -329,7 +335,7 @@ func (g *GitWorkspaceConfig) GitMCPServers(startIndex int) []MCPEntry {
 			Category:    "git",
 			UIHint:      "github",
 		})
-	case "gitlab":
+	case ProviderGitLab:
 		entries = append(entries, MCPEntry{
 			Name:        "gitlab",
 			Port:        GatewayBasePort + startIndex + 1,

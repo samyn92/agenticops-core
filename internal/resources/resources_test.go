@@ -96,8 +96,8 @@ func TestBuildAgentDeployment(t *testing.T) {
 	}
 
 	main := containers[0]
-	if main.Name != "agent-runtime" {
-		t.Errorf("expected container name 'agent-runtime', got %q", main.Name)
+	if main.Name != ContainerRuntime {
+		t.Errorf("expected container name %q, got %q", ContainerRuntime, main.Name)
 	}
 	if main.Image != agentsv1alpha1.DefaultFantasyImage {
 		t.Errorf("expected image %q, got %q", agentsv1alpha1.DefaultFantasyImage, main.Image)

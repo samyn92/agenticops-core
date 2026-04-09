@@ -53,6 +53,9 @@ const (
 	VolumeGateway = "gateway-config"
 	VolumeMCP     = "mcp-config"
 
+	// Container names.
+	ContainerRuntime = "agent-runtime"
+
 	// Mount paths.
 	MountData    = "/data"
 	MountTools   = "/tools"

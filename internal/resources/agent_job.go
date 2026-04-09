@@ -35,7 +35,7 @@ func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent,
 
 	// Inject AGENT_PROMPT and AGENT_RUN_NAME into the main container
 	for i := range podSpec.Containers {
-		if podSpec.Containers[i].Name == "agent-runtime" {
+		if podSpec.Containers[i].Name == ContainerRuntime {
 			podSpec.Containers[i].Env = append(podSpec.Containers[i].Env, corev1.EnvVar{
 				Name:  "AGENT_PROMPT",
 				Value: run.Spec.Prompt,
@@ -58,7 +58,7 @@ func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent,
 		// Count existing MCP sidecars to offset port allocation
 		mcpCount := 0
 		for _, c := range podSpec.Containers {
-			if c.Name != "agent-runtime" {
+			if c.Name != ContainerRuntime {
 				mcpCount++
 			}
 		}

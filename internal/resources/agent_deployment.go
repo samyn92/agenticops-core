@@ -366,7 +366,7 @@ func buildMainContainer(agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1
 	}
 
 	container := corev1.Container{
-		Name:         "agent-runtime",
+		Name:         ContainerRuntime,
 		Image:        agent.RuntimeImage(),
 		Command:      command,
 		Env:          env,
