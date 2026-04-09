@@ -24,11 +24,13 @@ import (
 )
 
 const (
-	// Container images for the git MCP tool server sidecars.
+	// Container images for the platform-specific MCP tool server sidecars.
 	// These are real container images (with rootfs, PATH, etc.) built from
 	// each server's Dockerfile — NOT the OCI artifacts pushed by `agent-tools push`.
 	// The "-server" suffix distinguishes container images from OCI artifacts.
-	GitToolImage    = "ghcr.io/samyn92/agent-tools/git-server:latest"
+	//
+	// Note: git operations (clone, commit, push, etc.) are now handled by
+	// go-git built into the runtime — no mcp-git sidecar needed.
 	GitHubToolImage = "ghcr.io/samyn92/agent-tools/github-server:latest"
 	GitLabToolImage = "ghcr.io/samyn92/agent-tools/gitlab-server:latest"
 
@@ -188,14 +190,12 @@ func (g *GitWorkspaceConfig) GitEnvVars() []corev1.EnvVar {
 	return env
 }
 
-// GitToolSidecars returns MCP gateway sidecar containers for the git tools.
-// The git MCP tool is always included. GitHub or GitLab tool is added based on provider.
+// GitToolSidecars returns MCP gateway sidecar containers for platform-specific tools.
+// Git operations (clone, commit, push, etc.) are handled by go-git in the runtime.
+// Only GitHub or GitLab tool sidecars are added (for PR/MR creation, issue management, etc.).
 // startIndex is the MCP gateway port index offset (9001 + startIndex).
 func (g *GitWorkspaceConfig) GitToolSidecars(startIndex int) []corev1.Container {
 	var sidecars []corev1.Container
-
-	// Git MCP tool (always needed for clone, commit, push, etc.)
-	sidecars = append(sidecars, buildGitMCPSidecar("git", GitToolImage, startIndex, nil))
 
 	// Platform-specific MCP tool (for PR/MR creation)
 	switch g.Provider {
@@ -206,14 +206,14 @@ func (g *GitWorkspaceConfig) GitToolSidecars(startIndex int) []corev1.Container 
 		if g.GitHubAPIURL != "" {
 			extra = append(extra, corev1.EnvVar{Name: "GITHUB_API_URL", Value: g.GitHubAPIURL})
 		}
-		sidecars = append(sidecars, buildGitMCPSidecar("github", GitHubToolImage, startIndex+1, extra))
+		sidecars = append(sidecars, buildGitMCPSidecar("github", GitHubToolImage, startIndex, extra))
 
 	case ProviderGitLab:
 		extra := []corev1.EnvVar{
 			{Name: "GITLAB_TOKEN", ValueFrom: g.tokenEnvVarSource()},
 			{Name: "GITLAB_URL", Value: g.GitLabBaseURL},
 		}
-		sidecars = append(sidecars, buildGitMCPSidecar("gitlab", GitLabToolImage, startIndex+1, extra))
+		sidecars = append(sidecars, buildGitMCPSidecar("gitlab", GitLabToolImage, startIndex, extra))
 	}
 
 	return sidecars
@@ -266,12 +266,10 @@ func buildGitMCPSidecar(name, image string, index int, extraEnv []corev1.EnvVar)
 	}
 }
 
-// GitToolVolumes returns volumes needed for the git MCP tool sidecars.
+// GitToolVolumes returns volumes needed for the platform-specific MCP tool sidecars.
 // Each sidecar needs an emptyDir for the gateway binary copy.
 func (g *GitWorkspaceConfig) GitToolVolumes() []corev1.Volume {
-	volumes := []corev1.Volume{
-		{Name: "gw-bin-git", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
-	}
+	var volumes []corev1.Volume
 	switch g.Provider {
 	case ProviderGitHub:
 		volumes = append(volumes, corev1.Volume{
@@ -286,11 +284,9 @@ func (g *GitWorkspaceConfig) GitToolVolumes() []corev1.Volume {
 }
 
 // GitToolInitContainers returns init containers that copy the mcp-gateway binary
-// into the shared emptyDir volumes for the sidecars.
+// into the shared emptyDir volumes for the platform-specific sidecars.
 func (g *GitWorkspaceConfig) GitToolInitContainers() []corev1.Container {
-	inits := []corev1.Container{
-		buildGatewayInitContainer("copy-gw-git", "gw-bin-git"),
-	}
+	var inits []corev1.Container
 	switch g.Provider {
 	case ProviderGitHub:
 		inits = append(inits, buildGatewayInitContainer("copy-gw-github", "gw-bin-github"))
@@ -313,24 +309,17 @@ func buildGatewayInitContainer(name, volumeName string) corev1.Container {
 }
 
 // GitMCPServers returns MCPEntry items for the runtime config so it knows
-// how to connect to the git MCP gateway sidecars.
+// how to connect to the platform-specific MCP gateway sidecars.
+// Git operations are handled by go-git built into the runtime (no MCP entry needed).
 // startIndex must match the startIndex used in GitToolSidecars.
 func (g *GitWorkspaceConfig) GitMCPServers(startIndex int) []MCPEntry {
-	entries := []MCPEntry{
-		{
-			Name:        "git",
-			Port:        GatewayBasePort + startIndex,
-			Description: "Git operations — status, diff, log, add, commit, push, pull, branch, clone",
-			Category:    "git",
-			UIHint:      "git",
-		},
-	}
+	var entries []MCPEntry
 
 	switch g.Provider {
 	case ProviderGitHub:
 		entries = append(entries, MCPEntry{
 			Name:        "github",
-			Port:        GatewayBasePort + startIndex + 1,
+			Port:        GatewayBasePort + startIndex,
 			Description: "GitHub API — PRs, issues, branches, checks, workflows",
 			Category:    "git",
 			UIHint:      "github",
@@ -338,7 +327,7 @@ func (g *GitWorkspaceConfig) GitMCPServers(startIndex int) []MCPEntry {
 	case ProviderGitLab:
 		entries = append(entries, MCPEntry{
 			Name:        "gitlab",
-			Port:        GatewayBasePort + startIndex + 1,
+			Port:        GatewayBasePort + startIndex,
 			Description: "GitLab API — MRs, issues, pipelines, projects",
 			Category:    "git",
 			UIHint:      "gitlab",
