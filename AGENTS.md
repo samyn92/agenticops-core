@@ -19,20 +19,30 @@ This creates:
 
 ### Workflow
 
-Edit code locally on your machine (files are live via hostPath), then shell into the dev pod:
+Edit code locally on your machine (files are live via hostPath), then run in the dev pod:
 
 ```sh
-kubectl exec -it -n agent-system deploy/agentops-dev -- bash
+# Build check (from local or dev pod)
+kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
+  "cd /workspace && go build ./..."
+
+# Apply changes to the cluster (dev pod, PATH required)
+kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
+  "cd /workspace && export PATH=/usr/local/bin:/go/bin:/usr/local/go/bin:\$PATH && \
+   make generate && make manifests && make install"
+
+# Restart the operator (kill old process first if running)
+kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
+  "cd /workspace && export PATH=/usr/local/bin:/go/bin:/usr/local/go/bin:\$PATH && \
+   pkill -f manager; go build -o /tmp/manager ./cmd/main.go && \
+   nohup /tmp/manager > /tmp/operator.log 2>&1 & echo \$!"
+
+# Verify operator is running
+kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
+  "pgrep -f manager && tail -5 /tmp/operator.log"
 ```
 
-Inside the pod:
-
-```sh
-make generate && make manifests    # regen deepcopy + CRD manifests
-make install                       # apply CRDs to k3s
-make run                           # run operator against k3s
-go build ./...                     # build check
-```
+**Important:** `kubectl` is at `/usr/local/bin/kubectl` inside the dev pod but `make` subshells don't always inherit PATH — always export it explicitly.
 
 ### Kubernetes Context
 

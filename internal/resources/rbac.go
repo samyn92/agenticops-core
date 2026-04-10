@@ -44,7 +44,7 @@ func BuildAgentServiceAccount(agent *agentsv1alpha1.Agent) *corev1.ServiceAccoun
 }
 
 // BuildAgentRole creates a namespaced Role granting the agent pod
-// permissions to manage AgentRun CRs and read Agent CRs.
+// permissions to manage AgentRun CRs, read Agent CRs, and read AgentResource CRs.
 func BuildAgentRole(agent *agentsv1alpha1.Agent) *rbacv1.Role {
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,6 +64,12 @@ func BuildAgentRole(agent *agentsv1alpha1.Agent) *rbacv1.Role {
 				APIGroups: []string{"agents.agentops.io"},
 				Resources: []string{"agents"},
 				Verbs:     []string{"get", "list", "watch"},
+			},
+			{
+				// Allow reading AgentResource CRs (list_task_agents resolves resource bindings)
+				APIGroups: []string{"agents.agentops.io"},
+				Resources: []string{"agentresources"},
+				Verbs:     []string{"get", "list"},
 			},
 		},
 	}

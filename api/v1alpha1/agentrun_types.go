@@ -32,13 +32,14 @@ const (
 )
 
 // AgentRunSource describes what created this AgentRun.
-// +kubebuilder:validation:Enum=channel;agent;schedule
+// +kubebuilder:validation:Enum=channel;agent;schedule;console
 type AgentRunSource string
 
 const (
 	AgentRunSourceChannel  AgentRunSource = "channel"
 	AgentRunSourceAgent    AgentRunSource = "agent"
 	AgentRunSourceSchedule AgentRunSource = "schedule"
+	AgentRunSourceConsole  AgentRunSource = "console"
 )
 
 // AgentRunSpec defines the desired state of AgentRun.
