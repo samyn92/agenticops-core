@@ -2,47 +2,31 @@
 
 ## Development Environment
 
-We develop on a local k3s cluster (single node, `pc-omarchy`). The dev pod runs in-cluster with your source code mounted via hostPath.
+We develop on a local k3s cluster (single node, `pc-omarchy`). The dev pod runs in-cluster with source code mounted via hostPath.
 
-### Dev Pod Setup
+Dev setup lives in the workspace-level `clusters/local_k3s/deploy/` directory. See the root `AGENTS.md` for the full layout.
 
-Deploy the dev pod (namespace: `agent-system`):
+### Dev Workflow
 
-```sh
-kubectl apply -f hack/dev/dev-pod.yaml
-```
-
-This creates:
-- ServiceAccount + ClusterRole with full operator permissions
-- Deployment running `golang:1.26` with an init script that installs kubectl, vim, jq, git
-- hostPath mount of this repo into `/workspace`
-
-### Workflow
-
-Edit code locally on your machine (files are live via hostPath), then run in the dev pod:
+Use the justfile recipes — all commands exec into the `operator-dev` pod:
 
 ```sh
-# Build check (from local or dev pod)
-kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
-  "cd /workspace && go build ./..."
-
-# Apply changes to the cluster (dev pod, PATH required)
-kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
-  "cd /workspace && export PATH=/usr/local/bin:/go/bin:/usr/local/go/bin:\$PATH && \
-   make generate && make manifests && make install"
-
-# Restart the operator (kill old process first if running)
-kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
-  "cd /workspace && export PATH=/usr/local/bin:/go/bin:/usr/local/go/bin:\$PATH && \
-   pkill -f manager; go build -o /tmp/manager ./cmd/main.go && \
-   nohup /tmp/manager > /tmp/operator.log 2>&1 & echo \$!"
-
-# Verify operator is running
-kubectl exec -n agent-system deploy/agentops-dev -- bash -c \
-  "pgrep -f manager && tail -5 /tmp/operator.log"
+just --justfile clusters/local_k3s/deploy/justfile <recipe>
 ```
 
-**Important:** `kubectl` is at `/usr/local/bin/kubectl` inside the dev pod but `make` subshells don't always inherit PATH — always export it explicitly.
+| Recipe | When to use |
+|--------|-------------|
+| `just op-reload` | Changed controller logic (`internal/controller/`, `internal/resources/`, `cmd/`). Kills manager, rebuilds, restarts. ~3-5s. |
+| `just op-reload-full` | Changed CRD types (`api/v1alpha1/*_types.go`). Runs `make generate` + `make manifests` + `make install` + restart. |
+| `just op-build` | Compile check only, no restart. |
+| `just op-logs` | Tail operator logs (follow). |
+| `just op-stop` | Stop the operator process. |
+| `just op-shell` | Interactive shell into the pod. |
+
+### When to use which reload
+
+- **`op-reload`** (fast path) — any change under `internal/` or `cmd/`. Skips CRD generation entirely.
+- **`op-reload-full`** (full path) — when you modify struct fields, markers, or annotations in `api/v1alpha1/*_types.go` or `api/v1alpha1/shared_types.go`. This regenerates DeepCopy methods, CRD YAML, and reinstalls CRDs into the cluster.
 
 ### Kubernetes Context
 
@@ -54,39 +38,40 @@ kubectl config use-context k3s
 
 ### CRDs
 
-4 CRDs in API group `agents.agentops.io/v1alpha1`:
+5 CRDs in API group `agents.agentops.io/v1alpha1`:
 
 - `agents.agents.agentops.io` (short: `ag`)
-- `channels.agents.agentops.io` (short: `ch`)
 - `agentruns.agents.agentops.io` (short: `ar`)
-- `mcpservers.agents.agentops.io` (short: `mcp`)
+- `channels.agents.agentops.io` (short: `ch`)
+- `agenttools.agents.agentops.io`
+- `agentresources.agents.agentops.io`
 
 ### Namespaces
 
 | Namespace | Purpose |
 |-----------|---------|
-| `agent-system` | Dev pod, operator, console |
-| `agents` | Agent workloads (created when deploying CRs) |
+| `agent-system` | Dev pods, operator, console |
+| `agents` | Agent workloads, Engram |
 
 ### Runtime
 
 The operator uses the **Charm Fantasy SDK (Go)** as its sole agent runtime.
-The runtime is developed in the standalone repo `agentops-runtime-fantasy`.
+The runtime is developed in the standalone repo `agentops-runtime`.
 
 ### Images
 
 | Image | Source | Purpose |
 |-------|--------|---------|
 | `ghcr.io/samyn92/agentops-operator` | `Dockerfile` (repo root) | Kubernetes operator |
-| `ghcr.io/samyn92/agent-runtime-fantasy` | `agentops-runtime-fantasy` repo | Fantasy SDK agent runtime |
+| `ghcr.io/samyn92/agentops-runtime-fantasy` | `agentops-runtime` repo | Fantasy SDK agent runtime |
 | `ghcr.io/samyn92/mcp-gateway` | `images/mcp-gateway/` | MCP protocol gateway (spawn + proxy modes) |
 
 ### Related Repos
 
 | Repo | Purpose |
 |------|---------|
-| `agentops-runtime-fantasy` | Fantasy agent runtime (Go, Charm Fantasy SDK) |
+| `agentops-runtime` | Fantasy agent runtime (Go, Charm Fantasy SDK) |
+| `agentops-console` | Web console (Go BFF + SolidJS PWA) |
 | `agent-channels` | Channel bridge images (gitlab, webhook, etc.) |
 | `agent-tools` | OCI tool/agent packaging CLI + tool packages |
-| `agent-console` | Web console |
-| `agent-factory` | Helm chart (future) |
+| `agent-factory` | Helm chart for deploying agents |
