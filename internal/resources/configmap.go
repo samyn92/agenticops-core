@@ -237,35 +237,45 @@ type MemoryConfigEntry struct {
 	ServerURL     string `json:"serverURL"`
 	Project       string `json:"project"`
 	ContextLimit  int    `json:"contextLimit"`
-	WindowSize    int    `json:"windowSize"`
 	AutoSummarize bool   `json:"autoSummarize"`
 	AutoSave      bool   `json:"autoSave"`
 	AutoSearch    bool   `json:"autoSearch"`
 }
 
+// DiscoveryConfigEntry holds discovery & delegation config for the runtime.
+// The runtime uses this to know its own scope/allowedCallers for filtering
+// when other agents query list_task_agents.
+type DiscoveryConfigEntry struct {
+	Description    string   `json:"description,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	Scope          string   `json:"scope,omitempty"`
+	AllowedCallers []string `json:"allowedCallers,omitempty"`
+}
+
 // AgentConfig is the JSON structure mounted at /etc/operator/config.json for the Fantasy runtime.
 type AgentConfig struct {
-	Runtime            string               `json:"runtime"`
-	Providers          []ProviderEntry      `json:"providers"`
-	PrimaryProvider    string               `json:"primaryProvider,omitempty"`
-	PrimaryModel       string               `json:"primaryModel"`
-	FallbackModels     []string             `json:"fallbackModels,omitempty"`
-	TitleModel         string               `json:"titleModel,omitempty"`
-	SystemPrompt       string               `json:"systemPrompt,omitempty"`
-	BuiltinTools       []string             `json:"builtinTools,omitempty"`
-	Tools              []ToolEntry          `json:"tools"`
-	MCPServers         []MCPEntry           `json:"mcpServers,omitempty"`
-	ToolHooks          *ToolHooksEntry      `json:"toolHooks,omitempty"`
-	ContextFiles       []ContextEntry       `json:"contextFiles,omitempty"`
-	Temperature        *float64             `json:"temperature,omitempty"`
-	MaxOutputTokens    *int64               `json:"maxOutputTokens,omitempty"`
-	MaxSteps           *int                 `json:"maxSteps,omitempty"`
-	MaxToolResultChars int                  `json:"maxToolResultChars,omitempty"`
-	BudgetFraction     *float64             `json:"budgetFraction,omitempty"`
-	PermissionTools    []string             `json:"permissionTools,omitempty"`
-	EnableQuestionTool bool                 `json:"enableQuestionTool,omitempty"`
-	Resources          []AgentResourceEntry `json:"resources,omitempty"`
-	Memory             *MemoryConfigEntry   `json:"memory,omitempty"`
+	Runtime            string                `json:"runtime"`
+	Providers          []ProviderEntry       `json:"providers"`
+	PrimaryProvider    string                `json:"primaryProvider,omitempty"`
+	PrimaryModel       string                `json:"primaryModel"`
+	FallbackModels     []string              `json:"fallbackModels,omitempty"`
+	TitleModel         string                `json:"titleModel,omitempty"`
+	SystemPrompt       string                `json:"systemPrompt,omitempty"`
+	BuiltinTools       []string              `json:"builtinTools,omitempty"`
+	Tools              []ToolEntry           `json:"tools"`
+	MCPServers         []MCPEntry            `json:"mcpServers,omitempty"`
+	ToolHooks          *ToolHooksEntry       `json:"toolHooks,omitempty"`
+	ContextFiles       []ContextEntry        `json:"contextFiles,omitempty"`
+	Temperature        *float64              `json:"temperature,omitempty"`
+	MaxOutputTokens    *int64                `json:"maxOutputTokens,omitempty"`
+	MaxSteps           *int                  `json:"maxSteps,omitempty"`
+	MaxToolResultChars int                   `json:"maxToolResultChars,omitempty"`
+	BudgetFraction     *float64              `json:"budgetFraction,omitempty"`
+	PermissionTools    []string              `json:"permissionTools,omitempty"`
+	EnableQuestionTool bool                  `json:"enableQuestionTool,omitempty"`
+	Resources          []AgentResourceEntry  `json:"resources,omitempty"`
+	Memory             *MemoryConfigEntry    `json:"memory,omitempty"`
+	Discovery          *DiscoveryConfigEntry `json:"discovery,omitempty"`
 }
 
 // ====================================================================
@@ -302,10 +312,6 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 			if contextLimit == 0 {
 				contextLimit = 5
 			}
-			windowSize := agent.Spec.Memory.WindowSize
-			if windowSize == 0 {
-				windowSize = 20
-			}
 			autoSummarize := true
 			if agent.Spec.Memory.AutoSummarize != nil {
 				autoSummarize = *agent.Spec.Memory.AutoSummarize
@@ -322,7 +328,6 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 				ServerURL:     serverURL,
 				Project:       project,
 				ContextLimit:  contextLimit,
-				WindowSize:    windowSize,
 				AutoSummarize: autoSummarize,
 				AutoSave:      autoSave,
 				AutoSearch:    autoSearch,
@@ -332,6 +337,16 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 			// so the agent knows when to use mem_save/mem_search/mem_context.
 			// The protocol sections are conditional based on autoSave/autoSearch.
 			config.SystemPrompt = strings.TrimRight(config.SystemPrompt, "\n ") + buildMemoryProtocol(agent.Spec.Memory)
+		}
+	}
+
+	// Discovery & delegation
+	if agent.Spec.Discovery != nil {
+		config.Discovery = &DiscoveryConfigEntry{
+			Description:    agent.Spec.Discovery.Description,
+			Tags:           agent.Spec.Discovery.Tags,
+			Scope:          string(agent.Spec.Discovery.Scope),
+			AllowedCallers: agent.Spec.Discovery.AllowedCallers,
 		}
 	}
 

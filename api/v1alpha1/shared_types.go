@@ -333,6 +333,54 @@ type AgentResourceBinding struct {
 }
 
 // -------------------------------------------------------------------
+// Discovery & Delegation
+// -------------------------------------------------------------------
+
+// DiscoveryScope controls who can discover this agent via list_task_agents.
+// +kubebuilder:validation:Enum=namespace;explicit;hidden
+type DiscoveryScope string
+
+const (
+	// DiscoveryScopeNamespace makes the agent visible to all agents in the namespace (default).
+	DiscoveryScopeNamespace DiscoveryScope = "namespace"
+	// DiscoveryScopeExplicit makes the agent visible only to agents listed in allowedCallers.
+	DiscoveryScopeExplicit DiscoveryScope = "explicit"
+	// DiscoveryScopeHidden makes the agent invisible in list_task_agents entirely.
+	DiscoveryScopeHidden DiscoveryScope = "hidden"
+)
+
+// DiscoverySpec controls how this agent appears to other agents and who can delegate to it.
+type DiscoverySpec struct {
+	// Short description shown to other agents in list_task_agents instead of
+	// the truncated system prompt. Should describe what this agent is good at
+	// in 1-2 sentences.
+	// +optional
+	// +kubebuilder:validation:MaxLength=500
+	Description string `json:"description,omitempty"`
+
+	// Tags for categorization and filtering. Other agents can use these to
+	// find the right specialist (e.g. "kubernetes", "security", "frontend").
+	// +optional
+	// +kubebuilder:validation:MaxItems=20
+	Tags []string `json:"tags,omitempty"`
+
+	// Scope controls visibility in list_task_agents.
+	// "namespace" (default): visible to all agents in the namespace.
+	// "explicit": only visible to agents listed in allowedCallers.
+	// "hidden": never appears in list_task_agents.
+	// +optional
+	// +kubebuilder:default=namespace
+	Scope DiscoveryScope `json:"scope,omitempty"`
+
+	// AllowedCallers restricts which agents can discover and delegate to this one.
+	// Only effective when scope is "explicit". Each entry is an agent name.
+	// When scope is "namespace", this field is ignored (all agents can delegate).
+	// When scope is "hidden", no agent can discover or delegate.
+	// +optional
+	AllowedCallers []string `json:"allowedCallers,omitempty"`
+}
+
+// -------------------------------------------------------------------
 // Memory (Engram)
 // -------------------------------------------------------------------
 

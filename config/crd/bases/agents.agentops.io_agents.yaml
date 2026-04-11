@@ -414,7 +414,9 @@ spec:
                       type: string
                     type: array
                   auditTools:
-                    description: Tools to audit-log via afterToolCall hook.
+                    description: |-
+                      Tools to audit-log via afterToolCall hook. When memory is enabled,
+                      audit events are also persisted as searchable observations.
                     items:
                       type: string
                     type: array
@@ -422,6 +424,72 @@ spec:
                     description: Patterns blocked in bash commands (substring match).
                     items:
                       type: string
+                    type: array
+                  contextInjectTools:
+                    description: |-
+                      Pre-execution memory queries: before a matched tool runs, relevant
+                      memories are fetched and recorded in the trace for observability.
+                    items:
+                      description: ContextInjectRuleSpec describes a pre-execution
+                        memory query for a tool.
+                      properties:
+                        limit:
+                          default: 3
+                          description: 'Max number of memory items to fetch. Default:
+                            3.'
+                          maximum: 10
+                          minimum: 1
+                          type: integer
+                        query:
+                          default: from_tool_args
+                          description: |-
+                            How to derive the search query. "from_tool_args" (default) uses the tool's
+                            primary argument. Any other value is used as a static query string.
+                          type: string
+                        tool:
+                          description: Tool name to match.
+                          type: string
+                      required:
+                      - tool
+                      type: object
+                    type: array
+                  memorySaveRules:
+                    description: |-
+                      Declarative rules for auto-saving tool results as memory observations.
+                      Each rule matches a tool name and optionally filters by output/args regex.
+                    items:
+                      description: |-
+                        MemorySaveRuleSpec describes a declarative rule for auto-saving tool results
+                        as memory observations in agentops-memory.
+                      properties:
+                        matchArgs:
+                          additionalProperties:
+                            type: string
+                          description: Map of arg_name → regex pattern. All patterns
+                            must match for the rule to fire.
+                          type: object
+                        matchOutput:
+                          description: Regex pattern to match against tool output.
+                            If empty, all output is captured.
+                          type: string
+                        scope:
+                          default: project
+                          description: 'Scope for the observation. Default: "project".'
+                          enum:
+                          - project
+                          - global
+                          type: string
+                        tool:
+                          description: Tool name to match (e.g. "bash", "web_search").
+                          type: string
+                        type:
+                          default: discovery
+                          description: 'Observation type to save (e.g. "bugfix", "discovery").
+                            Default: "discovery".'
+                          type: string
+                      required:
+                      - tool
+                      type: object
                     type: array
                 type: object
               tools:

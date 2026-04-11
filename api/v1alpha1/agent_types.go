@@ -126,6 +126,15 @@ type AgentSpec struct {
 	ContextFiles []ContextFileRef `json:"contextFiles,omitempty"`
 
 	// ====================================================================
+	// DISCOVERY & DELEGATION
+	// ====================================================================
+
+	// Discovery controls how this agent appears to other agents via
+	// the list_task_agents tool and who is allowed to delegate to it.
+	// +optional
+	Discovery *DiscoverySpec `json:"discovery,omitempty"`
+
+	// ====================================================================
 	// TOOLS (unified via AgentTool CRs)
 	// ====================================================================
 
