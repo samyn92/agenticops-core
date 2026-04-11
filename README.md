@@ -61,7 +61,7 @@ Agents run the [Charm Fantasy SDK](https://github.com/charmbracelet/fantasy) via
 - **Unified tool catalog** — deliver tools via OCI artifacts, MCP servers, ConfigMaps, inline scripts, or skills
 - **MCP gateway** — sidecar proxy in agent pods enforcing per-agent deny/allow permission rules
 - **Channel bridges** — connect Telegram, Slack, Discord, GitLab, GitHub, and generic webhooks to agents
-- **Engram memory** — persistent shared memory with auto-summarize, context-window management, and system-prompt injection
+- **agentops-memory** — persistent shared memory with FTS5 BM25 relevance-ranked context injection, deterministic session summaries, and system-prompt injection
 - **Resource bindings** — declarative catalog of GitHub repos/orgs, GitLab projects/groups, S3 buckets, and documentation URLs
 - **Concurrency control** — per-agent run limits with queue, reject, or replace policies
 - **Cron scheduling** — trigger agent runs on a schedule with templated prompts
@@ -88,7 +88,7 @@ Five CRDs in API group `agents.agentops.io/v1alpha1`:
 
 Two modes:
 
-- **`daemon`** — long-running Deployment + PVC + Service. Receives prompts via HTTP, maintains conversation state, persists knowledge to Engram.
+- **`daemon`** — long-running Deployment + PVC + Service. Receives prompts via HTTP, maintains conversation state, persists knowledge to agentops-memory.
 - **`task`** — one-shot Job per AgentRun. Prompt in, structured result out, container exits.
 
 Key spec fields:
@@ -99,7 +99,7 @@ Key spec fields:
 | Model | `model`, `primaryProvider`, `titleModel`, `providers`, `fallbackModels` |
 | Identity | `systemPrompt`, `contextFiles` |
 | Tools | `tools` (AgentTool bindings with per-agent permissions), `permissionTools`, `enableQuestionTool` |
-| Memory | `memory` (Engram: serverRef, project, contextLimit, windowSize, autoSummarize) |
+| Memory | `memory` (agentops-memory: serverRef, project, contextLimit, windowSize, autoSummarize) |
 | Tool Hooks | `toolHooks` (blocked commands, allowed paths, audit tools) |
 | Resources | `resourceBindings` (bind AgentResource CRs for context injection) |
 | Schedule | `schedule` (cron), `schedulePrompt` |
@@ -431,24 +431,24 @@ Custom Go binary in `images/mcp-gateway/` with two modes:
 
 ## Memory
 
-Agents can use [Engram](https://github.com/samyn92/engram) for persistent shared memory. Configure via `spec.memory`:
+Agents can use [agentops-memory](https://github.com/samyn92/agentops-memory) for persistent shared memory. Configure via `spec.memory`:
 
 ```yaml
 spec:
   memory:
-    serverRef: engram          # AgentTool CR name or in-cluster service
+    serverRef: agentops-memory  # AgentTool CR name or in-cluster service
     project: my-agent          # defaults to agent name
     contextLimit: 5
     windowSize: 20
     autoSummarize: true
 ```
 
-The operator resolves the Engram server URL by:
+The operator resolves the memory server URL by:
 
 1. Looking up a matching AgentTool CR by `serverRef` name (mcpServer/mcpEndpoint sources)
 2. Falling back to in-cluster service DNS (`http://<serverRef>.<namespace>.svc:7437`)
 
-Configuration is injected into `/etc/operator/config.json` and consumed by the runtime's EngramClient.
+Configuration is injected into `/etc/operator/config.json` and consumed by the runtime's memory client.
 
 ---
 
@@ -578,7 +578,7 @@ Triggered by `v*` tags:
 | `ghcr.io/samyn92/agentops-operator` | [`Dockerfile`](Dockerfile) | Kubernetes operator |
 | `ghcr.io/samyn92/agentops-runtime` | [agentops-runtime](https://github.com/samyn92/agentops-runtime) | Agent runtime (Fantasy SDK) |
 | `ghcr.io/samyn92/mcp-gateway` | [`images/mcp-gateway/`](images/mcp-gateway/) | MCP protocol gateway |
-| `ghcr.io/samyn92/engram` | [engram](https://github.com/samyn92/engram) | Shared memory server |
+| `ghcr.io/samyn92/agentops-memory` | [agentops-memory](https://github.com/samyn92/agentops-memory) | Purpose-built memory service |
 
 All images are published to GitHub Container Registry (GHCR). The operator and gateway use multi-stage builds with distroless base images.
 
@@ -588,11 +588,11 @@ All images are published to GitHub Container Registry (GHCR). The operator and g
 
 | Repository | Description |
 |------------|-------------|
-| [agentops-runtime](https://github.com/samyn92/agentops-runtime) | Agent runtime (Fantasy SDK + Engram memory) |
+| [agentops-runtime](https://github.com/samyn92/agentops-runtime) | Agent runtime (Fantasy SDK + agentops-memory) |
 | [agentops-console](https://github.com/samyn92/agentops-console) | Web console (Go BFF + SolidJS PWA) |
 | [agent-channels](https://github.com/samyn92/agent-channels) | Channel bridge images (Telegram, Slack, GitLab, etc.) |
 | [agent-tools](https://github.com/samyn92/agent-tools) | OCI tool/agent packaging CLI + tool packages |
-| [Engram](https://github.com/samyn92/engram) | Shared memory server (fork) |
+| [agentops-memory](https://github.com/samyn92/agentops-memory) | Purpose-built memory service (SQLite + FTS5 BM25) |
 | [Charm Fantasy SDK](https://github.com/charmbracelet/fantasy) | AI agent framework |
 
 ---

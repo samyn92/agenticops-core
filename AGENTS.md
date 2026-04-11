@@ -51,7 +51,7 @@ kubectl config use-context k3s
 | Namespace | Purpose |
 |-----------|---------|
 | `agent-system` | Dev pods, operator, console |
-| `agents` | Agent workloads, Engram |
+| `agents` | Agent workloads, agentops-memory |
 
 ### Runtime
 
