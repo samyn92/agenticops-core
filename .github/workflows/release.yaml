@@ -114,36 +114,13 @@ jobs:
   # =========================================================================
   helm-chart:
     name: Release Helm Chart
-    runs-on: ubuntu-latest
     needs: [operator-check]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.17.3
-      - name: Extract version
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Set chart version and appVersion
-        run: |
-          sed -i "s/^version:.*/version: ${{ steps.version.outputs.version }}/" charts/agentops-operator/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/agentops-operator/Chart.yaml
-      - name: Helm Lint
-        run: helm lint charts/agentops-operator
-      - name: Helm Template
-        run: helm template test charts/agentops-operator --namespace agent-system
-      - name: Helm Package
-        run: helm package charts/agentops-operator --destination dist/
-      - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
-      - name: Push Helm chart to GHCR OCI
-        run: helm push dist/agentops-operator-${{ steps.version.outputs.version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
-      - name: Upload chart artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: helm-chart
-          path: dist/agentops-operator-${{ steps.version.outputs.version }}.tgz
+    uses: samyn92/.github/.github/workflows/helm-release.yaml@main
+    with:
+      chart-path: charts/agentops-operator
+      upload-artifact: true
+    secrets:
+      registry-token: ${{ secrets.GITHUB_TOKEN }}
 
   # =========================================================================
   # GitHub Release with CRD manifests + Helm chart
@@ -177,4 +154,28 @@ jobs:
             --title "AgentOps ${{ github.ref_name }}" \
             --generate-notes \
             dist/install.yaml \
-            dist/agentops-operator-${{ steps.version.outputs.version }}.tgz
+            dist/${{ needs.helm-chart.outputs.chart-artifact }}
+
+  # =========================================================================
+  # Notify: dispatch version bump to agentops-platform
+  # =========================================================================
+  notify-platform:
+    name: Notify Platform
+    runs-on: ubuntu-latest
+    needs: [github-release]
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Dispatch to agentops-platform
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.PLATFORM_DISPATCH_TOKEN }}
+          repository: samyn92/agentops-platform
+          event-type: dependency-update
+          client-payload: |
+            {
+              "component": "agentops-operator",
+              "version": "${{ steps.version.outputs.version }}",
+              "source": "agentops-core"
+            }
