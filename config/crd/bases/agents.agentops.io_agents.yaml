@@ -63,6 +63,7 @@ spec:
                 description: |-
                   Built-in tools to enable.
                   Valid: bash, read, edit, write, grep, ls, glob, fetch.
+                  Omit for all defaults; set to empty list [] to disable all built-in tools.
                 items:
                   type: string
                 type: array
@@ -106,6 +107,48 @@ spec:
                   - configMapRef
                   type: object
                 type: array
+              discovery:
+                description: |-
+                  Discovery controls how this agent appears to other agents via
+                  the list_task_agents tool and who is allowed to delegate to it.
+                properties:
+                  allowedCallers:
+                    description: |-
+                      AllowedCallers restricts which agents can discover and delegate to this one.
+                      Only effective when scope is "explicit". Each entry is an agent name.
+                      When scope is "namespace", this field is ignored (all agents can delegate).
+                      When scope is "hidden", no agent can discover or delegate.
+                    items:
+                      type: string
+                    type: array
+                  description:
+                    description: |-
+                      Short description shown to other agents in list_task_agents instead of
+                      the truncated system prompt. Should describe what this agent is good at
+                      in 1-2 sentences.
+                    maxLength: 500
+                    type: string
+                  scope:
+                    default: namespace
+                    description: |-
+                      Scope controls visibility in list_task_agents.
+                      "namespace" (default): visible to all agents in the namespace.
+                      "explicit": only visible to agents listed in allowedCallers.
+                      "hidden": never appears in list_task_agents.
+                    enum:
+                    - namespace
+                    - explicit
+                    - hidden
+                    type: string
+                  tags:
+                    description: |-
+                      Tags for categorization and filtering. Other agents can use these to
+                      find the right specialist (e.g. "kubernetes", "security", "frontend").
+                    items:
+                      type: string
+                    maxItems: 20
+                    type: array
+                type: object
               enableQuestionTool:
                 description: |-
                   Enable the built-in "question" tool that lets the agent ask the user
