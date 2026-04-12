@@ -20,6 +20,7 @@ package resources
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -93,4 +94,27 @@ func MCPServerObjectName(mcpName string) string {
 // joinCommand joins command parts into a single space-separated string.
 func joinCommand(parts []string) string {
 	return strings.Join(parts, " ")
+}
+
+// ociRefPattern matches valid OCI image references:
+// [registry/]repository[:tag|@digest]
+// Only allows alphanumeric, dots, dashes, underscores, colons, slashes, and @sha256: digests.
+var ociRefPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]+$`)
+
+// ValidateOCIRef checks that an OCI reference contains no shell metacharacters.
+// Returns an error if the ref could be used for shell injection.
+func ValidateOCIRef(ref string) error {
+	if ref == "" {
+		return fmt.Errorf("OCI reference is empty")
+	}
+	if !ociRefPattern.MatchString(ref) {
+		return fmt.Errorf("OCI reference %q contains invalid characters", ref)
+	}
+	return nil
+}
+
+// ShellQuote wraps a string in single quotes with proper escaping for sh -c.
+// This is defense-in-depth for values interpolated into shell commands.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

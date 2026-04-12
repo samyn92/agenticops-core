@@ -108,6 +108,12 @@ func (r *Agent) validateMode(specPath *field.Path) field.ErrorList {
 		}
 	}
 
+	// Validate storage size when storage is configured
+	if r.Spec.Storage != nil && r.Spec.Storage.Size == "" {
+		errs = append(errs, field.Required(specPath.Child("storage", "size"),
+			"storage size is required when storage is configured (e.g. \"1Gi\")"))
+	}
+
 	return errs
 }
 

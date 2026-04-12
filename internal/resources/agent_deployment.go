@@ -282,7 +282,7 @@ func buildInitContainers(agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha
 }
 
 func buildCraneInitContainer(name, ref, destPath, volumeName, mountPath string, pullSecret *agentsv1alpha1.SecretKeyRef) corev1.Container {
-	cmd := fmt.Sprintf("mkdir -p %s && crane export %s - | tar -xf - -C %s", destPath, ref, destPath)
+	cmd := fmt.Sprintf("mkdir -p %s && crane export %s - | tar -xf - -C %s", ShellQuote(destPath), ShellQuote(ref), ShellQuote(destPath))
 
 	c := corev1.Container{
 		Name:    name,

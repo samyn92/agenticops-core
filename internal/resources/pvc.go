@@ -27,6 +27,12 @@ import (
 func BuildAgentPVC(agent *agentsv1alpha1.Agent) *corev1.PersistentVolumeClaim {
 	pvcName := ObjectName(agent.Name, "storage")
 
+	// Default to 1Gi if size is empty (defensive — webhook should catch this)
+	size := agent.Spec.Storage.Size
+	if size == "" {
+		size = "1Gi"
+	}
+
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
@@ -37,7 +43,7 @@ func BuildAgentPVC(agent *agentsv1alpha1.Agent) *corev1.PersistentVolumeClaim {
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(agent.Spec.Storage.Size),
+					corev1.ResourceStorage: resource.MustParse(size),
 				},
 			},
 		},

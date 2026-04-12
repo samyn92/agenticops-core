@@ -22,9 +22,6 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the agentops-core itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- mcpserver_admin_role.yaml
-- mcpserver_editor_role.yaml
-- mcpserver_viewer_role.yaml
 - agentrun_admin_role.yaml
 - agentrun_editor_role.yaml
 - agentrun_viewer_role.yaml

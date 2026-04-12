@@ -18,6 +18,8 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -101,6 +103,9 @@ func (r *AgentTool) validate() (admission.Warnings, error) {
 		if r.Spec.OCI.Ref == "" {
 			allErrs = append(allErrs, field.Required(specPath.Child("oci", "ref"),
 				"OCI reference is required"))
+		} else if err := validateOCIRefFormat(r.Spec.OCI.Ref); err != nil {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("oci", "ref"),
+				r.Spec.OCI.Ref, err.Error()))
 		}
 	}
 
@@ -145,6 +150,9 @@ func (r *AgentTool) validate() (admission.Warnings, error) {
 		if r.Spec.Skill.Ref == "" {
 			allErrs = append(allErrs, field.Required(specPath.Child("skill", "ref"),
 				"OCI reference is required for skill source"))
+		} else if err := validateOCIRefFormat(r.Spec.Skill.Ref); err != nil {
+			allErrs = append(allErrs, field.Invalid(specPath.Child("skill", "ref"),
+				r.Spec.Skill.Ref, err.Error()))
 		}
 	}
 
@@ -165,4 +173,17 @@ func (r *AgentTool) validate() (admission.Warnings, error) {
 	}
 
 	return nil, nil
+}
+
+// ociRefPattern matches valid OCI image references.
+// Allows: alphanumeric, dots, dashes, underscores, colons, slashes, @, +
+// Rejects: shell metacharacters (;, |, &, $, `, (, ), etc.)
+var ociRefPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._\-/:@+]+$`)
+
+// validateOCIRefFormat checks that an OCI reference contains no shell metacharacters.
+func validateOCIRefFormat(ref string) error {
+	if !ociRefPattern.MatchString(ref) {
+		return fmt.Errorf("contains invalid characters; only alphanumeric, '.', '-', '_', '/', ':', '@' are allowed")
+	}
+	return nil
 }
