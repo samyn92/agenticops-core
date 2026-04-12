@@ -68,8 +68,9 @@ type AgentSpec struct {
 
 	// Built-in tools to enable.
 	// Valid: bash, read, edit, write, grep, ls, glob, fetch.
+	// Omit for all defaults; set to empty list [] to disable all built-in tools.
 	// +optional
-	BuiltinTools []string `json:"builtinTools,omitempty"`
+	BuiltinTools []string `json:"builtinTools"`
 
 	// Temperature for model calls (0.0 - 2.0).
 	// +optional

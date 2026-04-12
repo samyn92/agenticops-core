@@ -261,7 +261,7 @@ type AgentConfig struct {
 	FallbackModels     []string              `json:"fallbackModels,omitempty"`
 	TitleModel         string                `json:"titleModel,omitempty"`
 	SystemPrompt       string                `json:"systemPrompt,omitempty"`
-	BuiltinTools       []string              `json:"builtinTools,omitempty"`
+	BuiltinTools       []string              `json:"builtinTools"`
 	Tools              []ToolEntry           `json:"tools"`
 	MCPServers         []MCPEntry            `json:"mcpServers,omitempty"`
 	ToolHooks          *ToolHooksEntry       `json:"toolHooks,omitempty"`
