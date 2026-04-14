@@ -481,7 +481,7 @@ func (r *AgentReconciler) resolveProviders(ctx context.Context, agent *agentsv1a
 	for _, ref := range agent.Spec.ProviderRefs {
 		prov := &agentsv1alpha1.Provider{}
 		if err := r.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: agent.Namespace}, prov); err != nil {
-			return nil, fmt.Errorf("Provider %q not found: %w", ref.Name, err)
+			return nil, fmt.Errorf("provider %q not found: %w", ref.Name, err)
 		}
 		providers = append(providers, *prov)
 	}
@@ -492,7 +492,7 @@ func (r *AgentReconciler) resolveProviders(ctx context.Context, agent *agentsv1a
 func (r *AgentReconciler) validateProvidersReady(providers []agentsv1alpha1.Provider) error {
 	for _, prov := range providers {
 		if prov.Status.Phase != agentsv1alpha1.ProviderPhaseReady {
-			return fmt.Errorf("Provider %q is not Ready (phase: %s)", prov.Name, prov.Status.Phase)
+			return fmt.Errorf("provider %q is not Ready (phase: %s)", prov.Name, prov.Status.Phase)
 		}
 	}
 	return nil

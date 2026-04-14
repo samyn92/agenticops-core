@@ -25,6 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const testSystemPrompt = "You are helpful."
+
 func testAgent() *agentsv1alpha1.Agent {
 	temp := 0.5
 	maxTokens := int64(4096)
@@ -41,7 +43,7 @@ func testAgent() *agentsv1alpha1.Agent {
 			Temperature:     &temp,
 			MaxOutputTokens: &maxTokens,
 			MaxSteps:        &maxSteps,
-			SystemPrompt:    "You are helpful.",
+			SystemPrompt:    testSystemPrompt,
 		},
 	}
 }
@@ -79,7 +81,7 @@ func TestBuildAgentConfigMap(t *testing.T) {
 	if cfg.MaxSteps == nil || *cfg.MaxSteps != 50 {
 		t.Errorf("unexpected maxSteps: %v", cfg.MaxSteps)
 	}
-	if cfg.SystemPrompt != "You are helpful." {
+	if cfg.SystemPrompt != testSystemPrompt {
 		t.Errorf("unexpected systemPrompt: %q", cfg.SystemPrompt)
 	}
 }
@@ -401,7 +403,7 @@ func TestBuildAgentConfigMap_MemoryProtocolInPlatformProtocol(t *testing.T) {
 	}
 
 	// System prompt should be UNMODIFIED — no memory protocol appended
-	if cfg.SystemPrompt != "You are helpful." {
+	if cfg.SystemPrompt != testSystemPrompt {
 		t.Errorf("expected unmodified system prompt, got %q", cfg.SystemPrompt)
 	}
 
@@ -439,7 +441,7 @@ func TestBuildAgentConfigMap_NoMemoryNoProtocol(t *testing.T) {
 	}
 
 	// System prompt should NOT contain memory protocol
-	if cfg.SystemPrompt != "You are helpful." {
+	if cfg.SystemPrompt != testSystemPrompt {
 		t.Errorf("expected unmodified system prompt, got %q", cfg.SystemPrompt)
 	}
 	// Platform protocol should contain identity but NOT memory protocol
@@ -484,7 +486,7 @@ func TestBuildAgentConfigMap_MemoryFullAutonomy(t *testing.T) {
 		t.Error("should not contain search-disabled instructions")
 	}
 	// SystemPrompt should be untouched
-	if cfg.SystemPrompt != "You are helpful." {
+	if cfg.SystemPrompt != testSystemPrompt {
 		t.Errorf("expected unmodified system prompt, got %q", cfg.SystemPrompt)
 	}
 }
@@ -604,7 +606,7 @@ func TestBuildAgentConfigMap_MemoryFullyPassive(t *testing.T) {
 		t.Error("expected memory protocol header even in passive mode")
 	}
 	// SystemPrompt should be untouched
-	if cfg.SystemPrompt != "You are helpful." {
+	if cfg.SystemPrompt != testSystemPrompt {
 		t.Errorf("expected unmodified system prompt, got %q", cfg.SystemPrompt)
 	}
 }
@@ -644,7 +646,7 @@ func TestBuildAgentConfigMap_DelegationProactive(t *testing.T) {
 	}
 
 	// SystemPrompt should be untouched
-	if cfg.SystemPrompt != "You are helpful." {
+	if cfg.SystemPrompt != testSystemPrompt {
 		t.Errorf("expected unmodified system prompt, got %q", cfg.SystemPrompt)
 	}
 
@@ -789,7 +791,7 @@ func TestBuildAgentConfigMap_DelegationAndMemory(t *testing.T) {
 	}
 
 	// SystemPrompt untouched
-	if cfg.SystemPrompt != "You are helpful." {
+	if cfg.SystemPrompt != testSystemPrompt {
 		t.Errorf("expected unmodified system prompt, got %q", cfg.SystemPrompt)
 	}
 }
