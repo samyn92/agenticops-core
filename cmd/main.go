@@ -103,7 +103,9 @@ func main() {
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			tracingShutdown(shutdownCtx)
+			if err := tracingShutdown(shutdownCtx); err != nil {
+				setupLog.Error(err, "tracing shutdown failed")
+			}
 		}()
 	}
 
