@@ -67,6 +67,11 @@ const (
 	// DefaultOTelEndpoint is the in-cluster Tempo OTLP gRPC endpoint.
 	// Injected unconditionally into agent pods so the runtime can export traces.
 	DefaultOTelEndpoint = "tempo.observability.svc.cluster.local:4317"
+
+	// DefaultNATSEndpoint is the in-cluster NATS URL for FEP event publishing.
+	// Injected unconditionally into agent pods so the runtime can publish FEP
+	// events via NATS even when no browser SSE stream is active.
+	DefaultNATSEndpoint = "nats://agentops-nats.agent-system.svc.cluster.local:4222"
 )
 
 // CommonLabels returns the standard set of labels for an agent-owned resource.

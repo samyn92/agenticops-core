@@ -445,6 +445,11 @@ func buildEnvVars(agent *agentsv1alpha1.Agent, providers []agentsv1alpha1.Provid
 		corev1.EnvVar{Name: "OTEL_SERVICE_NAME", Value: agent.Name},
 	)
 
+	// NATS — always inject so the runtime can publish FEP events persistently.
+	env = append(env,
+		corev1.EnvVar{Name: "NATS_URL", Value: DefaultNATSEndpoint},
+	)
+
 	// Plain-text env vars (sort for deterministic order)
 	envKeys := make([]string, 0, len(agent.Spec.Env))
 	for k := range agent.Spec.Env {
