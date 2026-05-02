@@ -90,7 +90,7 @@ func BuildAgentToolDeployment(tool *agentsv1alpha1.AgentTool) *appsv1.Deployment
 	}
 
 	// Gateway spawn mode
-	gatewayImage := MCPGatewayImage
+	gatewayImage := MCPGatewayImage()
 	gatewayVolume := "gateway-bin"
 
 	env = append(env,

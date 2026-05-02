@@ -11,6 +11,7 @@ env:
   REGISTRY: ghcr.io
   OPERATOR_IMAGE: ghcr.io/${{ github.repository_owner }}/agentops-operator
   GATEWAY_IMAGE: ghcr.io/${{ github.repository_owner }}/mcp-gateway
+  TOKEN_INJECTOR_IMAGE: ghcr.io/${{ github.repository_owner }}/token-injector
 
 jobs:
   # =========================================================================
@@ -71,6 +72,27 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Build
         run: go build -o mcp-gateway .
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...
+
+  # =========================================================================
+  # Go: build + test token-injector
+  # =========================================================================
+  token-injector-build:
+    name: Token Injector Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: images/token-injector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build
+        run: go build -o token-injector .
       - name: Test
         run: go test ./...
       - name: Vet
@@ -149,5 +171,33 @@ jobs:
           tags: |
             ${{ env.GATEWAY_IMAGE }}:latest
             ${{ env.GATEWAY_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-token-injector:
+    name: Docker Token Injector
+    runs-on: ubuntu-latest
+    needs: [token-injector-build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: images/token-injector
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.TOKEN_INJECTOR_IMAGE }}:latest
+            ${{ env.TOKEN_INJECTOR_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

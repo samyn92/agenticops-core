@@ -92,6 +92,9 @@ type ProviderSpec struct {
 // ProviderEndpoint configures the API endpoint.
 type ProviderEndpoint struct {
 	// Base URL override. Empty uses the SDK default for the provider type.
+	// When OAuth2ClientCredentials is set, this is the upstream target URL
+	// the token-injector sidecar will forward requests to; the agent itself
+	// will be pointed at http://localhost:<sidecar-port>.
 	// +optional
 	BaseURL string `json:"baseURL,omitempty"`
 
@@ -99,6 +102,40 @@ type ProviderEndpoint struct {
 	// Useful for proxy auth, rate-limit tokens, observability headers.
 	// +optional
 	Headers map[string]string `json:"headers,omitempty"`
+
+	// OAuth2ClientCredentials enables an OAuth2 client_credentials token-injector
+	// sidecar in front of the LLM API. When set, the operator injects a sidecar
+	// that performs the token exchange against TokenURL and forwards requests to
+	// BaseURL with a fresh bearer token. The agent container is pointed at the
+	// sidecar via localhost.
+	// +optional
+	OAuth2ClientCredentials *OAuth2ClientCredentials `json:"oauth2ClientCredentials,omitempty"`
+}
+
+// OAuth2ClientCredentials configures an OAuth2 client_credentials grant
+// performed by the token-injector sidecar. The sidecar fetches an access
+// token from TokenURL using the referenced client_id / client_secret and
+// injects it as a Bearer token on requests forwarded to the provider's
+// BaseURL.
+type OAuth2ClientCredentials struct {
+	// Token endpoint (OIDC / OAuth2) used for the client_credentials grant.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	TokenURL string `json:"tokenURL"`
+
+	// Secret containing the OAuth client ID.
+	ClientIDSecret SecretKeyRef `json:"clientIdSecret"`
+
+	// Secret containing the OAuth client secret.
+	ClientSecretSecret SecretKeyRef `json:"clientSecretSecret"`
+
+	// Optional space-separated OAuth scopes.
+	// +optional
+	Scope string `json:"scope,omitempty"`
+
+	// Optional OAuth audience parameter.
+	// +optional
+	Audience string `json:"audience,omitempty"`
 }
 
 // ProviderConfig holds type-specific provider configuration.

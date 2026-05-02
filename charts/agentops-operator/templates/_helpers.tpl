@@ -87,6 +87,20 @@ Operator image
 {{- end }}
 
 {{/*
+MCP gateway sidecar image (used by the operator at agent-pod build time).
+*/}}
+{{- define "agentops-operator.mcpGatewayImage" -}}
+{{- printf "%s:%s" .Values.sidecarImages.mcpGateway.repository (.Values.sidecarImages.mcpGateway.tag | default .Chart.AppVersion) }}
+{{- end }}
+
+{{/*
+OAuth2 token-injector sidecar image.
+*/}}
+{{- define "agentops-operator.tokenInjectorImage" -}}
+{{- printf "%s:%s" .Values.sidecarImages.tokenInjector.repository (.Values.sidecarImages.tokenInjector.tag | default .Chart.AppVersion) }}
+{{- end }}
+
+{{/*
 Manager RBAC rules — shared between ClusterRole and namespaced Roles.
 */}}
 {{- define "agentops-operator.managerRules" -}}

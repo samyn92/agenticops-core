@@ -524,8 +524,8 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 	for i := range agent.Spec.ProviderRefs {
 		providerBindingMap[agent.Spec.ProviderRefs[i].Name] = &agent.Spec.ProviderRefs[i]
 	}
-	for _, prov := range providers {
-		entry := buildProviderEntry(&prov, providerBindingMap[prov.Name])
+	for i, prov := range providers {
+		entry := buildProviderEntry(&prov, providerBindingMap[prov.Name], i)
 		config.Providers = append(config.Providers, entry)
 	}
 
@@ -597,7 +597,10 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 
 // buildProviderEntry creates an enriched ProviderEntry from a Provider CR,
 // merging any per-agent overrides from the ProviderBinding.
-func buildProviderEntry(prov *agentsv1alpha1.Provider, binding *agentsv1alpha1.ProviderBinding) ProviderEntry {
+// providerIndex is the position of this provider in the agent's resolved
+// providers slice; it is used to compute the token-injector sidecar port
+// when OAuth2 client_credentials is configured.
+func buildProviderEntry(prov *agentsv1alpha1.Provider, binding *agentsv1alpha1.ProviderBinding, providerIndex int) ProviderEntry {
 	entry := ProviderEntry{
 		Name: prov.Name,
 		Type: string(prov.Spec.Type),
@@ -607,6 +610,13 @@ func buildProviderEntry(prov *agentsv1alpha1.Provider, binding *agentsv1alpha1.P
 	if prov.Spec.Endpoint != nil {
 		entry.BaseURL = prov.Spec.Endpoint.BaseURL
 		entry.Headers = prov.Spec.Endpoint.Headers
+
+		// When an OAuth2 token-injector sidecar is configured, redirect the
+		// agent to the localhost sidecar instead of the upstream URL. The
+		// sidecar holds the real BaseURL as its TARGET_URL.
+		if prov.Spec.Endpoint.OAuth2ClientCredentials != nil && entry.BaseURL != "" {
+			entry.BaseURL = fmt.Sprintf("http://localhost:%d", TokenInjectorPort(providerIndex))
+		}
 	}
 
 	// Type-specific config

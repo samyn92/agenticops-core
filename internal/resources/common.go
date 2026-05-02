@@ -20,6 +20,7 @@ package resources
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -44,8 +45,25 @@ const (
 	// CraneImage is the OCI puller used in init containers.
 	CraneImage = "gcr.io/go-containerregistry/crane:debug"
 
-	// MCPGatewayImage is the MCP protocol gateway image (spawn + proxy modes).
-	MCPGatewayImage = "ghcr.io/samyn92/mcp-gateway:latest"
+	// DefaultMCPGatewayImage is the default MCP protocol gateway image
+	// (spawn + proxy modes). Overridable at runtime via the
+	// AGENTOPS_MCP_GATEWAY_IMAGE env var on the manager Deployment.
+	DefaultMCPGatewayImage = "ghcr.io/samyn92/mcp-gateway:latest"
+
+	// DefaultTokenInjectorImage is the default OAuth2 client_credentials
+	// token-injector sidecar image. Overridable at runtime via the
+	// AGENTOPS_TOKEN_INJECTOR_IMAGE env var on the manager Deployment.
+	DefaultTokenInjectorImage = "ghcr.io/samyn92/token-injector:latest"
+
+	// envMCPGatewayImage is the env var consulted by MCPGatewayImage().
+	envMCPGatewayImage = "AGENTOPS_MCP_GATEWAY_IMAGE"
+
+	// envTokenInjectorImage is the env var consulted by TokenInjectorImage().
+	envTokenInjectorImage = "AGENTOPS_TOKEN_INJECTOR_IMAGE"
+
+	// TokenInjectorBasePort is the starting port for token-injector sidecars
+	// (one per Provider with OAuth2ClientCredentials enabled).
+	TokenInjectorBasePort = 9101
 
 	// Volume names.
 	VolumeData    = "data"
@@ -122,4 +140,25 @@ func ValidateOCIRef(ref string) error {
 // This is defense-in-depth for values interpolated into shell commands.
 func ShellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// MCPGatewayImage returns the MCP gateway image reference, honoring the
+// AGENTOPS_MCP_GATEWAY_IMAGE env var override and falling back to
+// DefaultMCPGatewayImage. Read on every call so operator config changes
+// take effect on the next reconcile without a process restart in tests.
+func MCPGatewayImage() string {
+	if v := os.Getenv(envMCPGatewayImage); v != "" {
+		return v
+	}
+	return DefaultMCPGatewayImage
+}
+
+// TokenInjectorImage returns the OAuth2 token-injector sidecar image
+// reference, honoring the AGENTOPS_TOKEN_INJECTOR_IMAGE env var override
+// and falling back to DefaultTokenInjectorImage.
+func TokenInjectorImage() string {
+	if v := os.Getenv(envTokenInjectorImage); v != "" {
+		return v
+	}
+	return DefaultTokenInjectorImage
 }

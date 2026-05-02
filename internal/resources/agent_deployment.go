@@ -107,6 +107,19 @@ func buildAgentPodSpec(agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.
 		mcpIndex++
 	}
 
+	// Sidecar containers: OAuth2 token-injector proxies for Providers
+	// using the client_credentials grant (one sidecar per such Provider).
+	for i := range providers {
+		prov := &providers[i]
+		if !providerNeedsTokenInjector(prov) {
+			continue
+		}
+		sidecar := buildTokenInjectorSidecar(prov, i)
+		if sidecar != nil {
+			sidecars = append(sidecars, *sidecar)
+		}
+	}
+
 	containers := append([]corev1.Container{mainContainer}, sidecars...)
 
 	podSpec := corev1.PodSpec{
@@ -512,7 +525,7 @@ func buildGatewaySidecar(binding agentsv1alpha1.AgentToolBinding, tool *agentsv1
 
 	return &corev1.Container{
 		Name:  fmt.Sprintf("gw-%s", binding.Name),
-		Image: MCPGatewayImage,
+		Image: MCPGatewayImage(),
 		Env: []corev1.EnvVar{
 			{Name: "GATEWAY_MODE", Value: "proxy"},
 			{Name: "GATEWAY_UPSTREAM", Value: upstream},
@@ -529,6 +542,83 @@ func buildGatewaySidecar(binding agentsv1alpha1.AgentToolBinding, tool *agentsv1
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: VolumeGateway, MountPath: MountGateway, ReadOnly: true},
+		},
+	}
+}
+
+// ====================================================================
+// OAuth2 Token-Injector sidecar (per Provider)
+// ====================================================================
+
+// providerNeedsTokenInjector reports whether a Provider has OAuth2
+// client_credentials configured and therefore requires a sidecar.
+func providerNeedsTokenInjector(prov *agentsv1alpha1.Provider) bool {
+	return prov != nil &&
+		prov.Spec.Endpoint != nil &&
+		prov.Spec.Endpoint.OAuth2ClientCredentials != nil
+}
+
+// TokenInjectorPort returns the localhost port the token-injector for the
+// given provider listens on. The agent talks to http://localhost:<port>.
+func TokenInjectorPort(index int) int32 {
+	return int32(TokenInjectorBasePort + index)
+}
+
+// buildTokenInjectorSidecar builds the OAuth2 client_credentials token-injector
+// sidecar for a single Provider. It exposes a localhost endpoint that the agent
+// container points at via the Provider's BaseURL override in config.json.
+func buildTokenInjectorSidecar(prov *agentsv1alpha1.Provider, index int) *corev1.Container {
+	if !providerNeedsTokenInjector(prov) {
+		return nil
+	}
+	oauth := prov.Spec.Endpoint.OAuth2ClientCredentials
+	target := prov.Spec.Endpoint.BaseURL
+	if target == "" {
+		// Without a target URL there is nothing to forward to.
+		return nil
+	}
+	port := TokenInjectorPort(index)
+
+	env := []corev1.EnvVar{
+		{Name: "TOKEN_INJECTOR_TARGET_URL", Value: target},
+		{Name: "TOKEN_INJECTOR_TOKEN_URL", Value: oauth.TokenURL},
+		{Name: "TOKEN_INJECTOR_LISTEN_PORT", Value: fmt.Sprintf("%d", port)},
+		{
+			Name: "TOKEN_INJECTOR_CLIENT_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: oauth.ClientIDSecret.Name},
+					Key:                  oauth.ClientIDSecret.Key,
+				},
+			},
+		},
+		{
+			Name: "TOKEN_INJECTOR_CLIENT_SECRET",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: oauth.ClientSecretSecret.Name},
+					Key:                  oauth.ClientSecretSecret.Key,
+				},
+			},
+		},
+	}
+	if oauth.Scope != "" {
+		env = append(env, corev1.EnvVar{Name: "TOKEN_INJECTOR_SCOPE", Value: oauth.Scope})
+	}
+	if oauth.Audience != "" {
+		env = append(env, corev1.EnvVar{Name: "TOKEN_INJECTOR_AUDIENCE", Value: oauth.Audience})
+	}
+
+	return &corev1.Container{
+		Name:  fmt.Sprintf("ti-%s", prov.Name),
+		Image: TokenInjectorImage(),
+		Env:   env,
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          fmt.Sprintf("ti-%d", index),
+				ContainerPort: port,
+				Protocol:      corev1.ProtocolTCP,
+			},
 		},
 	}
 }

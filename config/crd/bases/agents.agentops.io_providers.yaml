@@ -198,8 +198,11 @@ spec:
                 description: Endpoint configuration (optional, defaults per type).
                 properties:
                   baseURL:
-                    description: Base URL override. Empty uses the SDK default for
-                      the provider type.
+                    description: |-
+                      Base URL override. Empty uses the SDK default for the provider type.
+                      When OAuth2ClientCredentials is set, this is the upstream target URL
+                      the token-injector sidecar will forward requests to; the agent itself
+                      will be pointed at http://localhost:<sidecar-port>.
                     type: string
                   headers:
                     additionalProperties:
@@ -207,6 +210,56 @@ spec:
                     description: |-
                       Custom HTTP headers injected into every API request.
                       Useful for proxy auth, rate-limit tokens, observability headers.
+                    type: object
+                  oauth2ClientCredentials:
+                    description: |-
+                      OAuth2ClientCredentials enables an OAuth2 client_credentials token-injector
+                      sidecar in front of the LLM API. When set, the operator injects a sidecar
+                      that performs the token exchange against TokenURL and forwards requests to
+                      BaseURL with a fresh bearer token. The agent container is pointed at the
+                      sidecar via localhost.
+                    properties:
+                      audience:
+                        description: Optional OAuth audience parameter.
+                        type: string
+                      clientIdSecret:
+                        description: Secret containing the OAuth client ID.
+                        properties:
+                          key:
+                            description: Key within the Secret.
+                            type: string
+                          name:
+                            description: Name of the Secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      clientSecretSecret:
+                        description: Secret containing the OAuth client secret.
+                        properties:
+                          key:
+                            description: Key within the Secret.
+                            type: string
+                          name:
+                            description: Name of the Secret.
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      scope:
+                        description: Optional space-separated OAuth scopes.
+                        type: string
+                      tokenURL:
+                        description: Token endpoint (OIDC / OAuth2) used for the client_credentials
+                          grant.
+                        minLength: 1
+                        type: string
+                    required:
+                    - clientIdSecret
+                    - clientSecretSecret
+                    - tokenURL
                     type: object
                 type: object
               type:

@@ -11,6 +11,22 @@ image:
   # -- Image digest (takes precedence over tag)
   digest: ""
 
+# Sidecar images injected by the operator into agent pods. These are
+# surfaced to the manager as env vars (AGENTOPS_MCP_GATEWAY_IMAGE,
+# AGENTOPS_TOKEN_INJECTOR_IMAGE). Leaving `tag` empty resolves to the
+# chart appVersion, so a chart bump pins all three components together.
+sidecarImages:
+  mcpGateway:
+    # -- MCP gateway sidecar image repository
+    repository: ghcr.io/samyn92/mcp-gateway
+    # -- MCP gateway image tag (defaults to chart appVersion)
+    tag: ""
+  tokenInjector:
+    # -- OAuth2 token-injector sidecar image repository
+    repository: ghcr.io/samyn92/token-injector
+    # -- Token-injector image tag (defaults to chart appVersion)
+    tag: ""
+
 # -- Image pull secrets for private registries
 imagePullSecrets: []
 # -- Override the chart name
