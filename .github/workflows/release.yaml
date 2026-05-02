@@ -77,88 +77,219 @@ jobs:
         run: go test ./...
 
   # =========================================================================
-  # Docker: build and push semver-tagged images
+  # Docker: build per-arch on native runners, then merge into multi-arch manifest
   # =========================================================================
-  docker-operator:
-    name: Release Operator
-    runs-on: ubuntu-latest
+  docker-operator-build:
+    name: Build Operator (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
     needs: [operator-check]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    outputs:
+      image: ${{ env.OPERATOR_IMAGE }}
     steps:
       - uses: actions/checkout@v4
-      - name: Extract version
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.OPERATOR_IMAGE }}:${{ steps.version.outputs.version }}
-            ${{ env.OPERATOR_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.OPERATOR_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=operator-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=operator-${{ matrix.platform }}
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-operator-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  docker-operator:
+    name: Release Operator
+    runs-on: ubuntu-latest
+    needs: [docker-operator-build]
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-operator-*
+          merge-multiple: true
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Create and push manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.OPERATOR_IMAGE }}:${{ steps.version.outputs.version }} \
+            -t ${{ env.OPERATOR_IMAGE }}:latest \
+            $(printf '${{ env.OPERATOR_IMAGE }}@sha256:%s ' *)
+
+  docker-gateway-build:
+    name: Build Gateway (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    needs: [gateway-check]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: images/mcp-gateway
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.GATEWAY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=gateway-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=gateway-${{ matrix.platform }}
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-gateway-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
   docker-gateway:
     name: Release Gateway
     runs-on: ubuntu-latest
-    needs: [gateway-check]
+    needs: [docker-gateway-build]
     steps:
-      - uses: actions/checkout@v4
       - name: Extract version
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-gateway-*
+          merge-multiple: true
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - name: Create and push manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.GATEWAY_IMAGE }}:${{ steps.version.outputs.version }} \
+            -t ${{ env.GATEWAY_IMAGE }}:latest \
+            $(printf '${{ env.GATEWAY_IMAGE }}@sha256:%s ' *)
+
+  docker-token-injector-build:
+    name: Build Token Injector (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    needs: [token-injector-check]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
         with:
-          context: images/mcp-gateway
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.GATEWAY_IMAGE }}:${{ steps.version.outputs.version }}
-            ${{ env.GATEWAY_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: images/token-injector
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.TOKEN_INJECTOR_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=token-injector-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=token-injector-${{ matrix.platform }}
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-token-injector-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
   docker-token-injector:
     name: Release Token Injector
     runs-on: ubuntu-latest
-    needs: [token-injector-check]
+    needs: [docker-token-injector-build]
     steps:
-      - uses: actions/checkout@v4
       - name: Extract version
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-token-injector-*
+          merge-multiple: true
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
-        with:
-          context: images/token-injector
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.TOKEN_INJECTOR_IMAGE }}:${{ steps.version.outputs.version }}
-            ${{ env.TOKEN_INJECTOR_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Create and push manifest
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.TOKEN_INJECTOR_IMAGE }}:${{ steps.version.outputs.version }} \
+            -t ${{ env.TOKEN_INJECTOR_IMAGE }}:latest \
+            $(printf '${{ env.TOKEN_INJECTOR_IMAGE }}@sha256:%s ' *)
 
   # =========================================================================
   # Helm: package chart, push OCI to GHCR
