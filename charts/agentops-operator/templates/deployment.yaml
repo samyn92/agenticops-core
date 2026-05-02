@@ -97,6 +97,13 @@ spec:
               value: {{ include "agentops-operator.mcpGatewayImage" . | quote }}
             - name: AGENTOPS_TOKEN_INJECTOR_IMAGE
               value: {{ include "agentops-operator.tokenInjectorImage" . | quote }}
+            {{- if and .Values.rbac.namespaced (gt (len .Values.rbac.watchNamespaces) 0) }}
+            # Restrict the controller-runtime cache to these namespaces so
+            # LIST/WATCH calls match the per-namespace Roles created when
+            # rbac.namespaced=true. Empty / unset = cluster-scoped (cluster RBAC required).
+            - name: WATCH_NAMESPACES
+              value: {{ join "," .Values.rbac.watchNamespaces | quote }}
+            {{- end }}
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

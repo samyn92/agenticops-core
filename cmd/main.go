@@ -22,6 +22,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -32,6 +33,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -214,6 +216,25 @@ func main() {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
+	}
+
+	// WATCH_NAMESPACES — comma-separated list of namespaces. When set,
+	// restrict the controller-runtime cache (and therefore all LIST/WATCH
+	// calls) to those namespaces. This pairs with rbac.namespaced=true in
+	// the Helm chart, which creates per-namespace Roles instead of a
+	// ClusterRole. Empty / unset = cluster-scoped (requires ClusterRole).
+	if raw := os.Getenv("WATCH_NAMESPACES"); raw != "" {
+		nsSet := map[string]cache.Config{}
+		for _, ns := range strings.Split(raw, ",") {
+			ns = strings.TrimSpace(ns)
+			if ns != "" {
+				nsSet[ns] = cache.Config{}
+			}
+		}
+		if len(nsSet) > 0 {
+			mgrOptions.Cache = cache.Options{DefaultNamespaces: nsSet}
+			setupLog.Info("namespace-scoped cache configured", "namespaces", raw)
+		}
 	}
 
 	if enableWebhooks {
