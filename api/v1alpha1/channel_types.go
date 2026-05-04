@@ -190,4 +190,3 @@ type ChannelList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Channel `json:"items"`
 }
-
