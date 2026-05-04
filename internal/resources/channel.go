@@ -98,6 +98,11 @@ func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Ag
 		container.Resources = *ch.Spec.Resources
 	}
 
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{container},
+	}
+	ApplySecurity(&podSpec, "channel", ch.Spec.Security)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ch.Name,
@@ -115,9 +120,7 @@ func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Ag
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
 				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{container},
-				},
+				Spec: podSpec,
 			},
 		},
 	}

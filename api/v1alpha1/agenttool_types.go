@@ -159,6 +159,9 @@ type MCPServerToolSource struct {
 	// Health check configuration.
 	// +optional
 	HealthCheck *MCPHealthCheck `json:"healthCheck,omitempty"`
+	// Security overrides for the MCP server pod. See SecurityOverrides.
+	// +optional
+	Security *SecurityOverrides `json:"security,omitempty"`
 }
 
 // MCPEndpointToolSource points to an external MCP server (absorbs MCPServer external mode).

@@ -21,12 +21,10 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -34,32 +32,29 @@ var channellog = logf.Log.WithName("channel-webhook")
 
 // SetupChannelWebhookWithManager registers the Channel validating webhook.
 func (r *Channel) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+	return ctrl.NewWebhookManagedBy(mgr, r).
 		WithValidator(r).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-agents-agentops-io-v1alpha1-channel,mutating=false,failurePolicy=fail,sideEffects=None,groups=agents.agentops.io,resources=channels,verbs=create;update,versions=v1alpha1,name=vchannel.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &Channel{}
+var _ admission.Validator[*Channel] = &Channel{}
 
-// ValidateCreate implements webhook.CustomValidator.
-func (r *Channel) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+// ValidateCreate implements admission.Validator.
+func (r *Channel) ValidateCreate(_ context.Context, obj *Channel) (admission.Warnings, error) {
 	channellog.Info("validate create", "name", r.Name)
-	ch := obj.(*Channel)
-	return ch.validate()
+	return obj.validate()
 }
 
-// ValidateUpdate implements webhook.CustomValidator.
-func (r *Channel) ValidateUpdate(_ context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+// ValidateUpdate implements admission.Validator.
+func (r *Channel) ValidateUpdate(_ context.Context, _ *Channel, newObj *Channel) (admission.Warnings, error) {
 	channellog.Info("validate update", "name", r.Name)
-	ch := newObj.(*Channel)
-	return ch.validate()
+	return newObj.validate()
 }
 
-// ValidateDelete implements webhook.CustomValidator.
-func (r *Channel) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+// ValidateDelete implements admission.Validator.
+func (r *Channel) ValidateDelete(_ context.Context, _ *Channel) (admission.Warnings, error) {
 	return nil, nil
 }
 

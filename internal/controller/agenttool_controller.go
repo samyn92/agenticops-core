@@ -177,6 +177,10 @@ func (r *AgentToolReconciler) reconcileInline(ctx context.Context, tool *agentsv
 func (r *AgentToolReconciler) reconcileMCPServer(ctx context.Context, tool *agentsv1alpha1.AgentTool) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
+	// Surface any security override clamps before we render the deployment.
+	setSecurityPolicyViolationsCondition(&tool.Status.Conditions,
+		resources.ComputeSecurityViolations(tool.Spec.MCPServer.Security))
+
 	// 1. ConfigMap
 	cm := resources.BuildAgentToolMCPConfigMap(tool)
 	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, tool, cm); err != nil {

@@ -129,6 +129,12 @@ func buildAgentPodSpec(agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.
 		ServiceAccountName: AgentServiceAccountName(agent),
 	}
 
+	// Apply restricted-by-default security on every container/init/sidecar
+	// and the pod itself, merged with any user-supplied overrides. The
+	// controller calls ComputeSecurityViolations(agent.Spec.Security)
+	// separately to surface clamps on .status.conditions.
+	ApplySecurity(&podSpec, ContainerRuntime, agent.Spec.Security)
+
 	return podSpec
 }
 
@@ -301,6 +307,9 @@ func buildCraneInitContainer(name, ref, destPath, volumeName, mountPath string, 
 		Name:    name,
 		Image:   CraneImage,
 		Command: []string{"sh", "-c", cmd},
+		// Force HOME to a writable location so crane (and any sub-process)
+		// can stat $HOME/.docker without hitting the read-only root fs.
+		Env: []corev1.EnvVar{{Name: "HOME", Value: MountTmp}},
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: volumeName, MountPath: mountPath},
 		},

@@ -21,12 +21,10 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -34,32 +32,29 @@ var agentresourcelog = logf.Log.WithName("agentresource-webhook")
 
 // SetupAgentResourceWebhookWithManager registers the AgentResource validating webhook.
 func (r *AgentResource) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+	return ctrl.NewWebhookManagedBy(mgr, r).
 		WithValidator(r).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-agents-agentops-io-v1alpha1-agentresource,mutating=false,failurePolicy=fail,sideEffects=None,groups=agents.agentops.io,resources=agentresources,verbs=create;update,versions=v1alpha1,name=vagentresource.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &AgentResource{}
+var _ admission.Validator[*AgentResource] = &AgentResource{}
 
-// ValidateCreate implements webhook.CustomValidator.
-func (r *AgentResource) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+// ValidateCreate implements admission.Validator.
+func (r *AgentResource) ValidateCreate(_ context.Context, obj *AgentResource) (admission.Warnings, error) {
 	agentresourcelog.Info("validate create", "name", r.Name)
-	res := obj.(*AgentResource)
-	return res.validate()
+	return obj.validate()
 }
 
-// ValidateUpdate implements webhook.CustomValidator.
-func (r *AgentResource) ValidateUpdate(_ context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+// ValidateUpdate implements admission.Validator.
+func (r *AgentResource) ValidateUpdate(_ context.Context, _ *AgentResource, newObj *AgentResource) (admission.Warnings, error) {
 	agentresourcelog.Info("validate update", "name", r.Name)
-	res := newObj.(*AgentResource)
-	return res.validate()
+	return newObj.validate()
 }
 
-// ValidateDelete implements webhook.CustomValidator.
-func (r *AgentResource) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+// ValidateDelete implements admission.Validator.
+func (r *AgentResource) ValidateDelete(_ context.Context, _ *AgentResource) (admission.Warnings, error) {
 	return nil, nil
 }
 

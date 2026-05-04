@@ -245,6 +245,15 @@ type AgentSpec struct {
 	// Network policy configuration.
 	// +optional
 	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+
+	// Security overrides for the agent pod. The operator applies a
+	// restricted-by-default SecurityContext to every pod it builds; this
+	// field lets users override fields the floor permits (UID/GID, FSGroup,
+	// seccomp profile path, automount opt-in). Any override that would
+	// weaken the restricted Pod Security Standard is silently clamped and
+	// reported on .status.conditions[type=SecurityPolicyViolations].
+	// +optional
+	Security *SecurityOverrides `json:"security,omitempty"`
 }
 
 // AgentStatus defines the observed state of Agent.

@@ -133,6 +133,10 @@ type ChannelSpec struct {
 	// Compute resources for the channel container.
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Security overrides for the channel pod. See SecurityOverrides.
+	// +optional
+	Security *SecurityOverrides `json:"security,omitempty"`
 }
 
 // ChannelStatus defines the observed state of Channel.

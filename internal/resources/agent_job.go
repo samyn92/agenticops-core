@@ -71,10 +71,14 @@ func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent,
 		}
 	}
 
-	// Inject git tool init containers and volumes (no sidecars — tools run via stdio)
+	// Inject git tool init containers and volumes (no sidecars — tools run via stdio).
+	// Init containers are appended after buildAgentPodSpec has already hardened
+	// the existing ones; re-apply ApplySecurity so the new ones get the same
+	// restricted SecurityContext + /tmp mount.
 	if gitCfg != nil {
 		podSpec.InitContainers = append(podSpec.InitContainers, gitCfg.GitToolInitContainers()...)
 		podSpec.Volumes = append(podSpec.Volumes, gitCfg.GitToolVolumes()...)
+		ApplySecurity(&podSpec, ContainerRuntime, agent.Spec.Security)
 	}
 
 	// Override the config volume to use a per-run ConfigMap if specified

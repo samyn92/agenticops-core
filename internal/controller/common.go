@@ -19,12 +19,16 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	agentsv1alpha1 "github.com/samyn92/agentops-core/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -337,4 +341,29 @@ func patchStatus(ctx context.Context, c client.Client, obj client.Object, patch 
 	log.V(1).Info("Patching status", "patch", string(patchData), "patchLen", len(patchData))
 
 	return c.Status().Patch(ctx, obj, patch)
+}
+
+// setSecurityPolicyViolationsCondition records the result of merging
+// user-supplied SecurityOverrides with the operator's restricted-PSS floor.
+// When the slice is empty, an explicit ConditionFalse is set so the user can
+// see the operator has confirmed their overrides are clean. When non-empty,
+// the condition becomes True and the message lists every clamped field.
+func setSecurityPolicyViolationsCondition(conds *[]metav1.Condition, violations []string) {
+	if len(violations) == 0 {
+		meta.SetStatusCondition(conds, metav1.Condition{
+			Type:    agentsv1alpha1.ConditionSecurityPolicyViolations,
+			Status:  metav1.ConditionFalse,
+			Reason:  "NoViolations",
+			Message: "Security overrides comply with the restricted Pod Security Standard.",
+		})
+		return
+	}
+	msg := fmt.Sprintf("%d override field(s) clamped to the restricted-PSS floor: %s",
+		len(violations), strings.Join(violations, "; "))
+	meta.SetStatusCondition(conds, metav1.Condition{
+		Type:    agentsv1alpha1.ConditionSecurityPolicyViolations,
+		Status:  metav1.ConditionTrue,
+		Reason:  "OverridesClamped",
+		Message: msg,
+	})
 }

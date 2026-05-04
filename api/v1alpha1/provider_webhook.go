@@ -21,12 +21,10 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -34,32 +32,29 @@ var providerlog = logf.Log.WithName("provider-webhook")
 
 // SetupProviderWebhookWithManager registers the Provider validating webhook.
 func (r *Provider) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+	return ctrl.NewWebhookManagedBy(mgr, r).
 		WithValidator(r).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-agents-agentops-io-v1alpha1-provider,mutating=false,failurePolicy=fail,sideEffects=None,groups=agents.agentops.io,resources=providers,verbs=create;update,versions=v1alpha1,name=vprovider.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &Provider{}
+var _ admission.Validator[*Provider] = &Provider{}
 
-// ValidateCreate implements webhook.CustomValidator.
-func (r *Provider) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+// ValidateCreate implements admission.Validator.
+func (r *Provider) ValidateCreate(_ context.Context, obj *Provider) (admission.Warnings, error) {
 	providerlog.Info("validate create", "name", r.Name)
-	prov := obj.(*Provider)
-	return prov.validate()
+	return obj.validate()
 }
 
-// ValidateUpdate implements webhook.CustomValidator.
-func (r *Provider) ValidateUpdate(_ context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+// ValidateUpdate implements admission.Validator.
+func (r *Provider) ValidateUpdate(_ context.Context, _ *Provider, newObj *Provider) (admission.Warnings, error) {
 	providerlog.Info("validate update", "name", r.Name)
-	prov := newObj.(*Provider)
-	return prov.validate()
+	return newObj.validate()
 }
 
-// ValidateDelete implements webhook.CustomValidator.
-func (r *Provider) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+// ValidateDelete implements admission.Validator.
+func (r *Provider) ValidateDelete(_ context.Context, _ *Provider) (admission.Warnings, error) {
 	// TODO: prevent deletion if agents still reference this provider
 	return nil, nil
 }

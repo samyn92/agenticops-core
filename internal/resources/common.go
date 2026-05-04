@@ -71,6 +71,14 @@ const (
 	VolumeConfig  = "operator-config"
 	VolumeGateway = "gateway-config"
 	VolumeMCP     = "mcp-config"
+	// VolumeTmp is an emptyDir volume mounted at /tmp on every operator-built
+	// container so that workloads can write temp files even with a read-only
+	// root filesystem (required by restricted Pod Security Standards).
+	// See security.go for the matching SecurityContext defaults.
+	VolumeTmp = "tmp"
+
+	// MountTmp is the mount path for VolumeTmp.
+	MountTmp = "/tmp"
 
 	// Container names.
 	ContainerRuntime = "agent-runtime"

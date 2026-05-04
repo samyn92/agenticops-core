@@ -197,6 +197,9 @@ func BuildAgentToolDeployment(tool *agentsv1alpha1.AgentTool) *appsv1.Deployment
 		podSpec.ServiceAccountName = src.ServiceAccountName
 	}
 
+	// Restricted-by-default security on the AgentTool MCP server pod.
+	ApplySecurity(&podSpec, "mcp-server", src.Security)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,

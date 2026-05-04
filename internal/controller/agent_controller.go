@@ -183,6 +183,13 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		Message: fmt.Sprintf("%d providers registered", totalProviders),
 	})
 
+	// Surface any security override clamps as a SecurityPolicyViolations
+	// condition. These are non-fatal: ApplySecurity has already replaced
+	// the offending values with the restricted floor, but the user needs
+	// to know their overrides were ignored.
+	setSecurityPolicyViolationsCondition(&agent.Status.Conditions,
+		resources.ComputeSecurityViolations(agent.Spec.Security))
+
 	// Branch by mode
 	var result ctrl.Result
 	var reconcileErr error

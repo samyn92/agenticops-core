@@ -16,6 +16,10 @@ limitations under the License.
 
 package v1alpha1
 
+import (
+	corev1 "k8s.io/api/core/v1"
+)
+
 // -------------------------------------------------------------------
 // Secret references
 // -------------------------------------------------------------------
@@ -438,3 +442,45 @@ type MCPOAuthConfig struct {
 	// Secret containing the OAuth client secret.
 	ClientSecretSecret SecretKeyRef `json:"clientSecretSecret"`
 }
+
+// -------------------------------------------------------------------
+// Security overrides
+// -------------------------------------------------------------------
+
+// SecurityOverrides exposes a narrow, safety-floor-respecting subset of
+// pod- and container-level SecurityContext fields. The operator merges
+// these on top of restricted-by-default values; any override that would
+// weaken the restricted Pod Security Standard (e.g. RunAsNonRoot=false,
+// AllowPrivilegeEscalation=true, ReadOnlyRootFilesystem=false, root UID,
+// adding capabilities, Unconfined seccomp) is silently clamped and the
+// owning resource gets a SecurityPolicyViolations condition listing every
+// rejected field.
+//
+// All fields are optional. Defaults are documented on each helper in
+// internal/resources/security.go.
+type SecurityOverrides struct {
+	// Pod-level overrides (e.g. RunAsUser, FSGroup, SupplementalGroups,
+	// custom seccomp profile path). Cannot disable RunAsNonRoot or use
+	// root UID 0.
+	// +optional
+	Pod *corev1.PodSecurityContext `json:"pod,omitempty"`
+
+	// Container-level overrides applied to the workload's main container
+	// only. Init containers and operator-injected sidecars (mcp-gateway,
+	// token-injector) always use the restricted defaults. Cannot enable
+	// privilege escalation, disable RO rootfs, disable RunAsNonRoot,
+	// or add capabilities.
+	// +optional
+	Container *corev1.SecurityContext `json:"container,omitempty"`
+
+	// AutomountServiceAccountToken opts the workload's pod into
+	// receiving its ServiceAccount's API token. Default false; set
+	// to true only for workloads that legitimately call the Kubernetes
+	// API at runtime.
+	// +optional
+	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
+}
+
+// Condition type emitted on Agent / AgentTool / Channel when one or more
+// security override fields have been clamped to the safety floor.
+const ConditionSecurityPolicyViolations = "SecurityPolicyViolations"

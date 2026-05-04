@@ -23,12 +23,10 @@ import (
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -42,32 +40,29 @@ var builtinTools = map[string]bool{
 
 // SetupAgentWebhookWithManager registers the Agent validating webhook.
 func (r *Agent) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+	return ctrl.NewWebhookManagedBy(mgr, r).
 		WithValidator(r).
 		Complete()
 }
 
 // +kubebuilder:webhook:path=/validate-agents-agentops-io-v1alpha1-agent,mutating=false,failurePolicy=fail,sideEffects=None,groups=agents.agentops.io,resources=agents,verbs=create;update,versions=v1alpha1,name=vagent.kb.io,admissionReviewVersions=v1
 
-var _ webhook.CustomValidator = &Agent{}
+var _ admission.Validator[*Agent] = &Agent{}
 
-// ValidateCreate implements webhook.CustomValidator.
-func (r *Agent) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+// ValidateCreate implements admission.Validator.
+func (r *Agent) ValidateCreate(_ context.Context, obj *Agent) (admission.Warnings, error) {
 	agentlog.Info("validate create", "name", r.Name)
-	agent := obj.(*Agent)
-	return agent.validate()
+	return obj.validate()
 }
 
-// ValidateUpdate implements webhook.CustomValidator.
-func (r *Agent) ValidateUpdate(_ context.Context, _ runtime.Object, newObj runtime.Object) (admission.Warnings, error) {
+// ValidateUpdate implements admission.Validator.
+func (r *Agent) ValidateUpdate(_ context.Context, _ *Agent, newObj *Agent) (admission.Warnings, error) {
 	agentlog.Info("validate update", "name", r.Name)
-	agent := newObj.(*Agent)
-	return agent.validate()
+	return newObj.validate()
 }
 
-// ValidateDelete implements webhook.CustomValidator.
-func (r *Agent) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+// ValidateDelete implements admission.Validator.
+func (r *Agent) ValidateDelete(_ context.Context, _ *Agent) (admission.Warnings, error) {
 	return nil, nil
 }
 

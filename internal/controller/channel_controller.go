@@ -79,6 +79,10 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
+	// Surface any security override clamps before rendering the deployment.
+	setSecurityPolicyViolationsCondition(&channel.Status.Conditions,
+		resources.ComputeSecurityViolations(channel.Spec.Security))
+
 	// 1. Deployment
 	deployment := resources.BuildChannelDeployment(channel, agent)
 	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, deployment); err != nil {
