@@ -280,4 +280,3 @@ type AgentResourceList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AgentResource `json:"items"`
 }
-
