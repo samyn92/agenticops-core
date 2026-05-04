@@ -191,6 +191,3 @@ type ChannelList struct {
 	Items           []Channel `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&Channel{}, &ChannelList{})
-}

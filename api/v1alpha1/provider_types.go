@@ -323,6 +323,3 @@ type ProviderList struct {
 	Items           []Provider `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&Provider{}, &ProviderList{})
-}

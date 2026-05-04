@@ -258,6 +258,3 @@ type AgentRunList struct {
 	Items           []AgentRun `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&AgentRun{}, &AgentRunList{})
-}

@@ -281,6 +281,3 @@ type AgentResourceList struct {
 	Items           []AgentResource `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&AgentResource{}, &AgentResourceList{})
-}

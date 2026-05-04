@@ -321,6 +321,3 @@ type AgentToolList struct {
 	Items           []AgentTool `json:"items"`
 }
 
-func init() {
-	SchemeBuilder.Register(&AgentTool{}, &AgentToolList{})
-}

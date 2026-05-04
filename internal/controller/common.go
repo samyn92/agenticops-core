@@ -102,7 +102,7 @@ func reconcileDeploymentSSA(
 		return fmt.Errorf("set owner ref on Deployment %s: %w", key, err)
 	}
 	d.SetGroupVersionKind(appsv1.SchemeGroupVersion.WithKind("Deployment"))
-	if err := c.Patch(ctx, d, client.Apply, client.FieldOwner(fieldManager), client.ForceOwnership); err != nil {
+	if err := c.Patch(ctx, d, client.Apply, client.FieldOwner(fieldManager), client.ForceOwnership); err != nil { //nolint:staticcheck // migrate to c.Apply() with applyconfigurations later
 		return fmt.Errorf("apply Deployment %s: %w", key, err)
 	}
 	ctrl.LoggerFrom(ctx).V(1).Info("Applied Deployment (SSA)", "name", key.Name)
