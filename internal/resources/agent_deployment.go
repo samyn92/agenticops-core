@@ -35,7 +35,7 @@ func BuildAgentDeployment(agent *agentsv1alpha1.Agent, agentTools []agentsv1alph
 	// Build pod spec
 	podSpec := buildAgentPodSpec(agent, agentTools, providers, false, infra)
 
-	return &appsv1.Deployment{
+	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      agent.Name,
 			Namespace: agent.Namespace,
@@ -58,6 +58,16 @@ func BuildAgentDeployment(agent *agentsv1alpha1.Agent, agentTools []agentsv1alph
 			},
 		},
 	}
+
+	// Use Recreate strategy when a PVC is attached — RWO volumes can only
+	// be mounted by one pod at a time, so RollingUpdate would deadlock.
+	if agent.Spec.Storage != nil {
+		deployment.Spec.Strategy = appsv1.DeploymentStrategy{
+			Type: appsv1.RecreateDeploymentStrategyType,
+		}
+	}
+
+	return deployment
 }
 
 // agentToolByName returns the AgentTool with the given name, or nil if not found.
