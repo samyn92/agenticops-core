@@ -119,7 +119,7 @@ func ResolveGitWorkspace(
 		}
 
 	default:
-		return nil, fmt.Errorf("Integration %q kind %q is not a git resource", resource.Name, resource.Spec.Kind)
+		return nil, fmt.Errorf("integration %q kind %q is not a git resource", resource.Name, resource.Spec.Kind)
 	}
 
 	// Default base branch

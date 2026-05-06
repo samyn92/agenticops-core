@@ -457,7 +457,7 @@ func (r *AgentReconciler) resolveIntegrations(ctx context.Context, agent *agents
 	for _, binding := range agent.Spec.Integrations {
 		res := &agentsv1alpha1.Integration{}
 		if err := r.Get(ctx, types.NamespacedName{Name: binding.Name, Namespace: agent.Namespace}, res); err != nil {
-			return nil, fmt.Errorf("Integration %q not found: %w", binding.Name, err)
+			return nil, fmt.Errorf("integration %q not found: %w", binding.Name, err)
 		}
 		integrations = append(integrations, *res)
 	}
@@ -478,7 +478,7 @@ func (r *AgentReconciler) validateAgentToolsReady(tools []agentsv1alpha1.AgentTo
 func (r *AgentReconciler) validateIntegrationsReady(integrations []agentsv1alpha1.Integration) error {
 	for _, res := range integrations {
 		if res.Status.Phase != agentsv1alpha1.IntegrationPhaseReady {
-			return fmt.Errorf("Integration %q is not Ready (phase: %s)", res.Name, res.Status.Phase)
+			return fmt.Errorf("integration %q is not Ready (phase: %s)", res.Name, res.Status.Phase)
 		}
 	}
 	return nil

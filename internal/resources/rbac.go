@@ -73,12 +73,12 @@ func BuildAgentRole(agent *agentsv1alpha1.Agent) *rbacv1.Role {
 				Resources: []string{"agents"},
 				Verbs:     []string{"get", "list", "watch"},
 			},
-		{
-			// Allow reading Integration CRs (list_task_agents resolves resource bindings)
-			APIGroups: []string{"agents.agentops.io"},
-			Resources: []string{"integrations"},
-			Verbs:     []string{"get", "list"},
-		},
+			{
+				// Allow reading Integration CRs (list_task_agents resolves resource bindings)
+				APIGroups: []string{"agents.agentops.io"},
+				Resources: []string{"integrations"},
+				Verbs:     []string{"get", "list"},
+			},
 		},
 	}
 }
