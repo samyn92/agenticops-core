@@ -139,7 +139,7 @@ Manager RBAC rules — shared between ClusterRole and namespaced Roles.
 - apiGroups:
     - agents.agentops.io
   resources:
-    - agentresources
+    - integrations
     - agentruns
     - agents
     - agenttools
@@ -156,7 +156,7 @@ Manager RBAC rules — shared between ClusterRole and namespaced Roles.
 - apiGroups:
     - agents.agentops.io
   resources:
-    - agentresources/finalizers
+    - integrations/finalizers
     - agentruns/finalizers
     - agents/finalizers
     - agenttools/finalizers
@@ -167,7 +167,7 @@ Manager RBAC rules — shared between ClusterRole and namespaced Roles.
 - apiGroups:
     - agents.agentops.io
   resources:
-    - agentresources/status
+    - integrations/status
     - agentruns/status
     - agents/status
     - agenttools/status
