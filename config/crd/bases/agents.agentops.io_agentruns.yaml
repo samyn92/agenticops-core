@@ -86,15 +86,15 @@ spec:
                       if it doesn't exist.
                     minLength: 1
                     type: string
-                  resourceRef:
+                  integrationRef:
                     description: |-
-                      Reference to an AgentResource CR (github-repo, gitlab-project, or git-repo)
+                      Reference to an Integration CR (github-repo, gitlab-project, or git-repo)
                       that provides the repository URL and credentials.
                     minLength: 1
                     type: string
                 required:
                 - branch
-                - resourceRef
+                - integrationRef
                 type: object
               outcome:
                 description: |-

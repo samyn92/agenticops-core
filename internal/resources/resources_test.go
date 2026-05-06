@@ -262,20 +262,20 @@ func TestBuildMCPConfigMap_WithMCPTools(t *testing.T) {
 	}
 }
 
-// ── AgentResource ConfigMap tests ──
+// ── Integration ConfigMap tests ──
 
 func TestBuildAgentConfigMap_WithResources(t *testing.T) {
 	agent := testAgent()
-	agent.Spec.ResourceBindings = []agentsv1alpha1.AgentResourceBinding{
+	agent.Spec.Integrations = []agentsv1alpha1.IntegrationBinding{
 		{Name: "my-repo", ReadOnly: true, AutoContext: true},
 		{Name: "my-group"},
 	}
 
-	resources := []agentsv1alpha1.AgentResource{
+	resources := []agentsv1alpha1.Integration{
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "my-repo", Namespace: "agents"},
-			Spec: agentsv1alpha1.AgentResourceSpec{
-				Kind:        agentsv1alpha1.AgentResourceKindGitHubRepo,
+			Spec: agentsv1alpha1.IntegrationSpec{
+				Kind:        agentsv1alpha1.IntegrationKindGitHubRepo,
 				DisplayName: "My Repo",
 				Description: "A test repo",
 				GitHub: &agentsv1alpha1.GitHubResourceConfig{
@@ -287,8 +287,8 @@ func TestBuildAgentConfigMap_WithResources(t *testing.T) {
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{Name: "my-group", Namespace: "agents"},
-			Spec: agentsv1alpha1.AgentResourceSpec{
-				Kind:        agentsv1alpha1.AgentResourceKindGitLabGroup,
+			Spec: agentsv1alpha1.IntegrationSpec{
+				Kind:        agentsv1alpha1.IntegrationKindGitLabGroup,
 				DisplayName: "My Group",
 				GitLabGroup: &agentsv1alpha1.GitLabGroupResourceConfig{
 					BaseURL:  "https://gitlab.com",

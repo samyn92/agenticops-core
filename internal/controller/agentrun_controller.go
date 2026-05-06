@@ -344,13 +344,13 @@ func (r *AgentRunReconciler) reconcileTaskRun(ctx context.Context, run *agentsv1
 		// Resolve git workspace config if spec.git is set
 		var gitCfg *resources.GitWorkspaceConfig
 		if run.Spec.Git != nil {
-			agentResource := &agentsv1alpha1.AgentResource{}
-			if err := r.Get(ctx, types.NamespacedName{Name: run.Spec.Git.ResourceRef, Namespace: run.Namespace}, agentResource); err != nil {
-				log.Error(err, "Failed to resolve AgentResource for git workspace", "resourceRef", run.Spec.Git.ResourceRef)
-				r.setRunFailedStatus(run, fmt.Sprintf("AgentResource %q not found: %v", run.Spec.Git.ResourceRef, err))
+			integration := &agentsv1alpha1.Integration{}
+			if err := r.Get(ctx, types.NamespacedName{Name: run.Spec.Git.IntegrationRef, Namespace: run.Namespace}, integration); err != nil {
+				log.Error(err, "Failed to resolve Integration for git workspace", "integrationRef", run.Spec.Git.IntegrationRef)
+				r.setRunFailedStatus(run, fmt.Sprintf("Integration %q not found: %v", run.Spec.Git.IntegrationRef, err))
 				return ctrl.Result{}, nil
 			}
-			resolved, err := resources.ResolveGitWorkspace(run.Spec.Git, agentResource)
+			resolved, err := resources.ResolveGitWorkspace(run.Spec.Git, integration)
 			if err != nil {
 				log.Error(err, "Failed to resolve git workspace config")
 				r.setRunFailedStatus(run, fmt.Sprintf("git workspace config error: %v", err))

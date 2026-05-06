@@ -286,11 +286,11 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AgentTool")
 		os.Exit(1)
 	}
-	if err := (&controller.AgentResourceReconciler{
+	if err := (&controller.IntegrationReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AgentResource")
+		setupLog.Error(err, "unable to create controller", "controller", "Integration")
 		os.Exit(1)
 	}
 	if err := (&controller.ProviderReconciler{
@@ -316,8 +316,8 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "AgentTool")
 			os.Exit(1)
 		}
-		if err := (&agentsv1alpha1.AgentResource{}).SetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "AgentResource")
+		if err := (&agentsv1alpha1.Integration{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Integration")
 			os.Exit(1)
 		}
 		if err := (&agentsv1alpha1.Provider{}).SetupWebhookWithManager(mgr); err != nil {

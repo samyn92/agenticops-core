@@ -164,6 +164,31 @@ spec:
                 - IfNotPresent
                 - Never
                 type: string
+              integrations:
+                description: |-
+                  Integrations (repos, platforms, etc.) bound to this agent.
+                  Users can select bound integrations in the console UI to scope prompts.
+                items:
+                  description: IntegrationBinding references an Integration CR from
+                    an Agent.
+                  properties:
+                    autoContext:
+                      description: |-
+                        Automatically inject this integration context into every prompt
+                        without requiring manual selection in the UI.
+                      type: boolean
+                    name:
+                      description: Name of the Integration CR to bind.
+                      minLength: 1
+                      type: string
+                    readOnly:
+                      description: Mark the integration as read-only for the agent
+                        (advisory, enforced by runtime).
+                      type: boolean
+                  required:
+                  - name
+                  type: object
+                type: array
               maxOutputTokens:
                 description: Maximum output tokens per model call.
                 format: int64
@@ -352,31 +377,6 @@ spec:
                   - name
                   type: object
                 minItems: 1
-                type: array
-              resourceBindings:
-                description: |-
-                  External resources (repos, groups, etc.) bound to this agent.
-                  Users can select bound resources in the console UI to scope prompts.
-                items:
-                  description: AgentResourceBinding references an AgentResource CR
-                    from an Agent.
-                  properties:
-                    autoContext:
-                      description: |-
-                        Automatically inject this resource context into every prompt
-                        without requiring manual selection in the UI.
-                      type: boolean
-                    name:
-                      description: Name of the AgentResource CR to bind.
-                      minLength: 1
-                      type: string
-                    readOnly:
-                      description: Mark the resource as read-only for the agent (advisory,
-                        enforced by runtime).
-                      type: boolean
-                  required:
-                  - name
-                  type: object
                 type: array
               resources:
                 description: Compute resources for the agent container.

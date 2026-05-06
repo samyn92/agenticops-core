@@ -31,21 +31,21 @@ import (
 	agentsv1alpha1 "github.com/samyn92/agentops-core/api/v1alpha1"
 )
 
-// AgentResourceReconciler reconciles an AgentResource object.
-type AgentResourceReconciler struct {
+// IntegrationReconciler reconciles an Integration object.
+type IntegrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=agents.agentops.io,resources=agentresources,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=agents.agentops.io,resources=agentresources/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=agents.agentops.io,resources=agentresources/finalizers,verbs=update
+// +kubebuilder:rbac:groups=agents.agentops.io,resources=integrations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=agents.agentops.io,resources=integrations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=agents.agentops.io,resources=integrations/finalizers,verbs=update
 
-func (r *AgentResourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *IntegrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	// Fetch the AgentResource
-	res := &agentsv1alpha1.AgentResource{}
+	// Fetch the Integration
+	res := &agentsv1alpha1.Integration{}
 	if err := r.Get(ctx, req.NamespacedName, res); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -56,7 +56,7 @@ func (r *AgentResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Save a copy for status patch comparison
 	statusPatch := client.MergeFrom(res.DeepCopy())
 
-	log.Info("Reconciling AgentResource", "name", res.Name, "kind", res.Spec.Kind)
+	log.Info("Reconciling Integration", "name", res.Name, "kind", res.Spec.Kind)
 
 	// Validate the resource configuration
 	if err := r.validateResource(res); err != nil {
@@ -68,15 +68,15 @@ func (r *AgentResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Resource is declarative metadata — mark as Ready
-	res.Status.Phase = agentsv1alpha1.AgentResourcePhaseReady
+	res.Status.Phase = agentsv1alpha1.IntegrationPhaseReady
 	meta.SetStatusCondition(&res.Status.Conditions, metav1.Condition{
-		Type:    agentsv1alpha1.AgentResourceConditionReady,
+		Type:    agentsv1alpha1.IntegrationConditionReady,
 		Status:  metav1.ConditionTrue,
 		Reason:  "Valid",
-		Message: fmt.Sprintf("AgentResource %q (%s) is ready", res.Spec.DisplayName, res.Spec.Kind),
+		Message: fmt.Sprintf("Integration %q (%s) is ready", res.Spec.DisplayName, res.Spec.Kind),
 	})
 
-	log.Info("AgentResource reconciled", "phase", res.Status.Phase, "kind", res.Spec.Kind)
+	log.Info("Integration reconciled", "phase", res.Status.Phase, "kind", res.Spec.Kind)
 
 	// Patch status (only writes if status actually changed)
 	if err := patchStatus(ctx, r.Client, res, statusPatch); err != nil {
@@ -88,33 +88,33 @@ func (r *AgentResourceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 // validateResource performs basic validation that the kind-specific config is present.
 // This is a safety net — most validation happens in the webhook.
-func (r *AgentResourceReconciler) validateResource(res *agentsv1alpha1.AgentResource) error {
+func (r *IntegrationReconciler) validateResource(res *agentsv1alpha1.Integration) error {
 	switch res.Spec.Kind {
-	case agentsv1alpha1.AgentResourceKindGitHubRepo:
+	case agentsv1alpha1.IntegrationKindGitHubRepo:
 		if res.Spec.GitHub == nil {
 			return fmt.Errorf("github config is required for kind=%s", res.Spec.Kind)
 		}
-	case agentsv1alpha1.AgentResourceKindGitHubOrg:
+	case agentsv1alpha1.IntegrationKindGitHubOrg:
 		if res.Spec.GitHubOrg == nil {
 			return fmt.Errorf("githubOrg config is required for kind=%s", res.Spec.Kind)
 		}
-	case agentsv1alpha1.AgentResourceKindGitLabProject:
+	case agentsv1alpha1.IntegrationKindGitLabProject:
 		if res.Spec.GitLab == nil {
 			return fmt.Errorf("gitlab config is required for kind=%s", res.Spec.Kind)
 		}
-	case agentsv1alpha1.AgentResourceKindGitLabGroup:
+	case agentsv1alpha1.IntegrationKindGitLabGroup:
 		if res.Spec.GitLabGroup == nil {
 			return fmt.Errorf("gitlabGroup config is required for kind=%s", res.Spec.Kind)
 		}
-	case agentsv1alpha1.AgentResourceKindGitRepo:
+	case agentsv1alpha1.IntegrationKindGitRepo:
 		if res.Spec.Git == nil {
 			return fmt.Errorf("git config is required for kind=%s", res.Spec.Kind)
 		}
-	case agentsv1alpha1.AgentResourceKindS3Bucket:
+	case agentsv1alpha1.IntegrationKindS3Bucket:
 		if res.Spec.S3 == nil {
 			return fmt.Errorf("s3 config is required for kind=%s", res.Spec.Kind)
 		}
-	case agentsv1alpha1.AgentResourceKindDocumentation:
+	case agentsv1alpha1.IntegrationKindDocumentation:
 		if res.Spec.Documentation == nil {
 			return fmt.Errorf("documentation config is required for kind=%s", res.Spec.Kind)
 		}
@@ -124,11 +124,11 @@ func (r *AgentResourceReconciler) validateResource(res *agentsv1alpha1.AgentReso
 	return nil
 }
 
-// setFailedStatus sets the AgentResource status to Failed. Caller must patch status.
-func (r *AgentResourceReconciler) setFailedStatus(res *agentsv1alpha1.AgentResource, message string) {
-	res.Status.Phase = agentsv1alpha1.AgentResourcePhaseFailed
+// setFailedStatus sets the Integration status to Failed. Caller must patch status.
+func (r *IntegrationReconciler) setFailedStatus(res *agentsv1alpha1.Integration, message string) {
+	res.Status.Phase = agentsv1alpha1.IntegrationPhaseFailed
 	meta.SetStatusCondition(&res.Status.Conditions, metav1.Condition{
-		Type:    agentsv1alpha1.AgentResourceConditionReady,
+		Type:    agentsv1alpha1.IntegrationConditionReady,
 		Status:  metav1.ConditionFalse,
 		Reason:  "Failed",
 		Message: message,
@@ -136,9 +136,9 @@ func (r *AgentResourceReconciler) setFailedStatus(res *agentsv1alpha1.AgentResou
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AgentResourceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *IntegrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&agentsv1alpha1.AgentResource{}).
-		Named("agentresource").
+		For(&agentsv1alpha1.Integration{}).
+		Named("integration").
 		Complete(r)
 }

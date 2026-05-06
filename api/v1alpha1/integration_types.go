@@ -20,46 +20,93 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// AgentResourceKind defines the type of resource.
+// IntegrationKind defines the type of integration.
 // +kubebuilder:validation:Enum=github-repo;github-org;gitlab-project;gitlab-group;git-repo;s3-bucket;documentation
-type AgentResourceKind string
+type IntegrationKind string
 
 const (
-	AgentResourceKindGitHubRepo    AgentResourceKind = "github-repo"
-	AgentResourceKindGitHubOrg     AgentResourceKind = "github-org"
-	AgentResourceKindGitLabProject AgentResourceKind = "gitlab-project"
-	AgentResourceKindGitLabGroup   AgentResourceKind = "gitlab-group"
-	AgentResourceKindGitRepo       AgentResourceKind = "git-repo"
-	AgentResourceKindS3Bucket      AgentResourceKind = "s3-bucket"
-	AgentResourceKindDocumentation AgentResourceKind = "documentation"
+	IntegrationKindGitHubRepo    IntegrationKind = "github-repo"
+	IntegrationKindGitHubOrg     IntegrationKind = "github-org"
+	IntegrationKindGitLabProject IntegrationKind = "gitlab-project"
+	IntegrationKindGitLabGroup   IntegrationKind = "gitlab-group"
+	IntegrationKindGitRepo       IntegrationKind = "git-repo"
+	IntegrationKindS3Bucket      IntegrationKind = "s3-bucket"
+	IntegrationKindDocumentation IntegrationKind = "documentation"
 )
 
-// AgentResourcePhase describes the current phase of an AgentResource.
-type AgentResourcePhase string
+// IntegrationPhase describes the current phase of an Integration.
+type IntegrationPhase string
 
 const (
-	AgentResourcePhasePending AgentResourcePhase = "Pending"
-	AgentResourcePhaseReady   AgentResourcePhase = "Ready"
-	AgentResourcePhaseFailed  AgentResourcePhase = "Failed"
+	IntegrationPhasePending IntegrationPhase = "Pending"
+	IntegrationPhaseReady   IntegrationPhase = "Ready"
+	IntegrationPhaseFailed  IntegrationPhase = "Failed"
 )
 
-// AgentResourceSpec defines the desired state of AgentResource.
-type AgentResourceSpec struct {
+// IntegrationTrigger defines an event-driven trigger that creates AgentRuns
+// when matching events occur on the platform.
+type IntegrationTrigger struct {
+	// Event type to match (e.g. "merge_request", "pull_request", "push", "issue").
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	On string `json:"on"`
+
+	// Actions to filter on (e.g. ["open", "update", "merge"]).
+	// Empty means all actions.
+	// +optional
+	Actions []string `json:"actions,omitempty"`
+
+	// Labels to filter on. Event must have at least one matching label.
+	// Empty means no label filtering.
+	// +optional
+	Labels []string `json:"labels,omitempty"`
+
+	// Name of the Agent CR to trigger.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	AgentRef string `json:"agentRef"`
+
+	// Go text/template rendered with event data as the prompt for the AgentRun.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Prompt string `json:"prompt"`
+
+	// Git workspace configuration for the triggered AgentRun.
+	// If set, the agent gets a cloned workspace with a feature branch.
+	// +optional
+	Git *IntegrationTriggerGit `json:"git,omitempty"`
+}
+
+// IntegrationTriggerGit configures the git workspace for triggered AgentRuns.
+type IntegrationTriggerGit struct {
+	// Branch name template. Supports Go template with event data.
+	// Example: "agent/review-{{.object_attributes.iid}}"
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	Branch string `json:"branch"`
+
+	// Base branch for the PR/MR target. Defaults to the integration's default branch.
+	// +optional
+	BaseBranch string `json:"baseBranch,omitempty"`
+}
+
+// IntegrationSpec defines the desired state of Integration.
+type IntegrationSpec struct {
 
 	// ====================================================================
 	// IDENTITY
 	// ====================================================================
 
-	// Kind of resource (e.g. github-repo, gitlab-group, git-repo).
+	// Kind of integration (e.g. github-repo, gitlab-project, git-repo).
 	// +kubebuilder:validation:Required
-	Kind AgentResourceKind `json:"kind"`
+	Kind IntegrationKind `json:"kind"`
 
 	// Human-friendly display name shown in the console UI.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	DisplayName string `json:"displayName"`
 
-	// Optional description of the resource for UI tooltips.
+	// Optional description for UI tooltips.
 	// +optional
 	Description string `json:"description,omitempty"`
 
@@ -67,7 +114,7 @@ type AgentResourceSpec struct {
 	// CREDENTIALS
 	// ====================================================================
 
-	// Optional credentials for accessing the resource.
+	// Optional credentials for accessing the platform.
 	// The secret key usage is kind-specific (e.g. API token for GitHub/GitLab,
 	// SSH key for git, AWS credentials for S3).
 	// +optional
@@ -105,6 +152,15 @@ type AgentResourceSpec struct {
 	// Documentation configuration (kind: documentation).
 	// +optional
 	Documentation *DocumentationResourceConfig `json:"documentation,omitempty"`
+
+	// ====================================================================
+	// TRIGGERS
+	// ====================================================================
+
+	// Event-driven triggers. When a matching event occurs on the platform,
+	// the operator creates an AgentRun for the specified agent.
+	// +optional
+	Triggers []IntegrationTrigger `json:"triggers,omitempty"`
 }
 
 // ====================================================================
@@ -234,49 +290,50 @@ type DocumentationResourceConfig struct {
 // Status
 // ====================================================================
 
-// AgentResourceStatus defines the observed state of AgentResource.
-type AgentResourceStatus struct {
+// IntegrationStatus defines the observed state of Integration.
+type IntegrationStatus struct {
 	// Current phase: Pending, Ready, Failed.
 	// +optional
-	Phase AgentResourcePhase `json:"phase,omitempty"`
+	Phase IntegrationPhase `json:"phase,omitempty"`
 
 	// Standard conditions.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-// Condition types for AgentResource.
+// Condition types for Integration.
 const (
-	// AgentResourceConditionReady indicates the resource is validated and usable.
-	AgentResourceConditionReady = "Ready"
+	// IntegrationConditionReady indicates the integration is validated and usable.
+	IntegrationConditionReady = "Ready"
 )
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=ares
+// +kubebuilder:resource:shortName=intg
 // +kubebuilder:printcolumn:name="Kind",type=string,JSONPath=`.spec.kind`
 // +kubebuilder:printcolumn:name="Display Name",type=string,JSONPath=`.spec.displayName`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Triggers",type=integer,JSONPath=`.spec.triggers`,priority=1
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
-// AgentResource is the Schema for the agentresources API.
-// A declarative catalog entry for an external resource (Git repo, GitLab group,
-// S3 bucket, documentation, etc.) that agents can work with.
-// Agents bind to resources via spec.resourceBindings, and users can select them
-// in the console UI to scope prompts.
-type AgentResource struct {
+// Integration is the Schema for the integrations API.
+// A declarative connection to an external platform (Git repo, GitLab project,
+// GitHub repo, S3 bucket, etc.) that agents can work with. Includes optional
+// event-driven triggers that automatically create AgentRuns when matching
+// events occur on the platform.
+type Integration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   AgentResourceSpec   `json:"spec,omitempty"`
-	Status AgentResourceStatus `json:"status,omitempty"`
+	Spec   IntegrationSpec   `json:"spec,omitempty"`
+	Status IntegrationStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// AgentResourceList contains a list of AgentResource.
-type AgentResourceList struct {
+// IntegrationList contains a list of Integration.
+type IntegrationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []AgentResource `json:"items"`
+	Items           []Integration `json:"items"`
 }

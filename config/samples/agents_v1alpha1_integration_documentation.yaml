@@ -1,5 +1,5 @@
 apiVersion: agents.agentops.io/v1alpha1
-kind: AgentResource
+kind: Integration
 metadata:
   name: upstream-docs
   namespace: agents

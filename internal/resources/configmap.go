@@ -290,8 +290,8 @@ type ContextEntry struct {
 	Path string `json:"path"`
 }
 
-// AgentResourceEntry describes a resource binding for the runtime config.
-type AgentResourceEntry struct {
+// IntegrationEntry describes a resource binding for the runtime config.
+type IntegrationEntry struct {
 	Name        string `json:"name"`
 	Kind        string `json:"kind"`
 	DisplayName string `json:"displayName"`
@@ -300,60 +300,60 @@ type AgentResourceEntry struct {
 	AutoContext bool   `json:"autoContext,omitempty"`
 
 	// Kind-specific config (one of these will be set)
-	GitHub        *AgentResourceGitHubEntry        `json:"github,omitempty"`
-	GitHubOrg     *AgentResourceGitHubOrgEntry     `json:"githubOrg,omitempty"`
-	GitLab        *AgentResourceGitLabEntry        `json:"gitlab,omitempty"`
-	GitLabGroup   *AgentResourceGitLabGroupEntry   `json:"gitlabGroup,omitempty"`
-	Git           *AgentResourceGitEntry           `json:"git,omitempty"`
-	S3            *AgentResourceS3Entry            `json:"s3,omitempty"`
-	Documentation *AgentResourceDocumentationEntry `json:"documentation,omitempty"`
+	GitHub        *IntegrationGitHubEntry        `json:"github,omitempty"`
+	GitHubOrg     *IntegrationGitHubOrgEntry     `json:"githubOrg,omitempty"`
+	GitLab        *IntegrationGitLabEntry        `json:"gitlab,omitempty"`
+	GitLabGroup   *IntegrationGitLabGroupEntry   `json:"gitlabGroup,omitempty"`
+	Git           *IntegrationGitEntry           `json:"git,omitempty"`
+	S3            *IntegrationS3Entry            `json:"s3,omitempty"`
+	Documentation *IntegrationDocumentationEntry `json:"documentation,omitempty"`
 }
 
-// AgentResourceGitHubEntry holds GitHub repo config for the runtime.
-type AgentResourceGitHubEntry struct {
+// IntegrationGitHubEntry holds GitHub repo config for the runtime.
+type IntegrationGitHubEntry struct {
 	Owner         string `json:"owner"`
 	Repo          string `json:"repo"`
 	DefaultBranch string `json:"defaultBranch,omitempty"`
 	APIURL        string `json:"apiURL,omitempty"`
 }
 
-// AgentResourceGitHubOrgEntry holds GitHub org config for the runtime.
-type AgentResourceGitHubOrgEntry struct {
+// IntegrationGitHubOrgEntry holds GitHub org config for the runtime.
+type IntegrationGitHubOrgEntry struct {
 	Org        string   `json:"org"`
 	RepoFilter []string `json:"repoFilter,omitempty"`
 	APIURL     string   `json:"apiURL,omitempty"`
 }
 
-// AgentResourceGitLabEntry holds GitLab project config for the runtime.
-type AgentResourceGitLabEntry struct {
+// IntegrationGitLabEntry holds GitLab project config for the runtime.
+type IntegrationGitLabEntry struct {
 	BaseURL       string `json:"baseURL"`
 	Project       string `json:"project"`
 	DefaultBranch string `json:"defaultBranch,omitempty"`
 }
 
-// AgentResourceGitLabGroupEntry holds GitLab group config for the runtime.
-type AgentResourceGitLabGroupEntry struct {
+// IntegrationGitLabGroupEntry holds GitLab group config for the runtime.
+type IntegrationGitLabGroupEntry struct {
 	BaseURL  string   `json:"baseURL"`
 	Group    string   `json:"group"`
 	Projects []string `json:"projects,omitempty"`
 }
 
-// AgentResourceGitEntry holds plain git repo config for the runtime.
-type AgentResourceGitEntry struct {
+// IntegrationGitEntry holds plain git repo config for the runtime.
+type IntegrationGitEntry struct {
 	URL    string `json:"url"`
 	Branch string `json:"branch,omitempty"`
 }
 
-// AgentResourceS3Entry holds S3 bucket config for the runtime.
-type AgentResourceS3Entry struct {
+// IntegrationS3Entry holds S3 bucket config for the runtime.
+type IntegrationS3Entry struct {
 	Bucket   string `json:"bucket"`
 	Region   string `json:"region,omitempty"`
 	Endpoint string `json:"endpoint,omitempty"`
 	Prefix   string `json:"prefix,omitempty"`
 }
 
-// AgentResourceDocumentationEntry holds documentation config for the runtime.
-type AgentResourceDocumentationEntry struct {
+// IntegrationDocumentationEntry holds documentation config for the runtime.
+type IntegrationDocumentationEntry struct {
 	URLs []string `json:"urls,omitempty"`
 }
 
@@ -396,7 +396,7 @@ type AgentConfig struct {
 	BudgetFraction     *float64               `json:"budgetFraction,omitempty"`
 	PermissionTools    []string               `json:"permissionTools,omitempty"`
 	EnableQuestionTool bool                   `json:"enableQuestionTool,omitempty"`
-	Resources          []AgentResourceEntry   `json:"resources,omitempty"`
+	Resources          []IntegrationEntry     `json:"resources,omitempty"`
 	Memory             *MemoryConfigEntry     `json:"memory,omitempty"`
 	Delegation         *DelegationConfigEntry `json:"delegation,omitempty"`
 }
@@ -409,7 +409,7 @@ type AgentConfig struct {
 // agentTools is the resolved list of AgentTool CRs (used to look up the memory server URL
 // and to build tool/MCP entries).
 // providers is the resolved list of Provider CRs referenced by the agent via providerRefs.
-func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1alpha1.AgentResource, agentTools []agentsv1alpha1.AgentTool, providers []agentsv1alpha1.Provider) (*corev1.ConfigMap, error) {
+func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, integrations []agentsv1alpha1.Integration, agentTools []agentsv1alpha1.AgentTool, providers []agentsv1alpha1.Provider) (*corev1.ConfigMap, error) {
 	config := AgentConfig{
 		Runtime:            "fantasy",
 		PrimaryModel:       agent.Spec.Model,
@@ -559,14 +559,14 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 		}
 	}
 
-	// Resources (AgentResource bindings)
-	bindingMap := make(map[string]agentsv1alpha1.AgentResourceBinding)
-	for _, b := range agent.Spec.ResourceBindings {
+	// Resources (Integration bindings)
+	bindingMap := make(map[string]agentsv1alpha1.IntegrationBinding)
+	for _, b := range agent.Spec.Integrations {
 		bindingMap[b.Name] = b
 	}
-	for _, res := range agentResources {
+	for _, res := range integrations {
 		binding := bindingMap[res.Name]
-		entry := AgentResourceEntry{
+		entry := IntegrationEntry{
 			Name:        res.Name,
 			Kind:        string(res.Spec.Kind),
 			DisplayName: res.Spec.DisplayName,
@@ -574,7 +574,7 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, agentResources []agentsv1a
 			ReadOnly:    binding.ReadOnly,
 			AutoContext: binding.AutoContext,
 		}
-		mapAgentResourceKind(&entry, &res)
+		mapIntegrationKind(&entry, &res)
 		config.Resources = append(config.Resources, entry)
 	}
 
@@ -800,63 +800,63 @@ func BuildAgentRunConfigMap(baseConfigMap *corev1.ConfigMap, runName string, git
 	}, nil
 }
 
-// mapAgentResourceKind populates the kind-specific fields of an AgentResourceEntry
-// based on the AgentResource spec. Extracted to reduce cyclomatic complexity of
+// mapIntegrationKind populates the kind-specific fields of an IntegrationEntry
+// based on the Integration spec. Extracted to reduce cyclomatic complexity of
 // BuildAgentConfigMap.
-func mapAgentResourceKind(entry *AgentResourceEntry, res *agentsv1alpha1.AgentResource) {
+func mapIntegrationKind(entry *IntegrationEntry, res *agentsv1alpha1.Integration) {
 	switch res.Spec.Kind {
-	case agentsv1alpha1.AgentResourceKindGitHubRepo:
+	case agentsv1alpha1.IntegrationKindGitHubRepo:
 		if res.Spec.GitHub != nil {
-			entry.GitHub = &AgentResourceGitHubEntry{
+			entry.GitHub = &IntegrationGitHubEntry{
 				Owner:         res.Spec.GitHub.Owner,
 				Repo:          res.Spec.GitHub.Repo,
 				DefaultBranch: res.Spec.GitHub.DefaultBranch,
 				APIURL:        res.Spec.GitHub.APIURL,
 			}
 		}
-	case agentsv1alpha1.AgentResourceKindGitHubOrg:
+	case agentsv1alpha1.IntegrationKindGitHubOrg:
 		if res.Spec.GitHubOrg != nil {
-			entry.GitHubOrg = &AgentResourceGitHubOrgEntry{
+			entry.GitHubOrg = &IntegrationGitHubOrgEntry{
 				Org:        res.Spec.GitHubOrg.Org,
 				RepoFilter: res.Spec.GitHubOrg.RepoFilter,
 				APIURL:     res.Spec.GitHubOrg.APIURL,
 			}
 		}
-	case agentsv1alpha1.AgentResourceKindGitLabProject:
+	case agentsv1alpha1.IntegrationKindGitLabProject:
 		if res.Spec.GitLab != nil {
-			entry.GitLab = &AgentResourceGitLabEntry{
+			entry.GitLab = &IntegrationGitLabEntry{
 				BaseURL:       res.Spec.GitLab.BaseURL,
 				Project:       res.Spec.GitLab.Project,
 				DefaultBranch: res.Spec.GitLab.DefaultBranch,
 			}
 		}
-	case agentsv1alpha1.AgentResourceKindGitLabGroup:
+	case agentsv1alpha1.IntegrationKindGitLabGroup:
 		if res.Spec.GitLabGroup != nil {
-			entry.GitLabGroup = &AgentResourceGitLabGroupEntry{
+			entry.GitLabGroup = &IntegrationGitLabGroupEntry{
 				BaseURL:  res.Spec.GitLabGroup.BaseURL,
 				Group:    res.Spec.GitLabGroup.Group,
 				Projects: res.Spec.GitLabGroup.Projects,
 			}
 		}
-	case agentsv1alpha1.AgentResourceKindGitRepo:
+	case agentsv1alpha1.IntegrationKindGitRepo:
 		if res.Spec.Git != nil {
-			entry.Git = &AgentResourceGitEntry{
+			entry.Git = &IntegrationGitEntry{
 				URL:    res.Spec.Git.URL,
 				Branch: res.Spec.Git.Branch,
 			}
 		}
-	case agentsv1alpha1.AgentResourceKindS3Bucket:
+	case agentsv1alpha1.IntegrationKindS3Bucket:
 		if res.Spec.S3 != nil {
-			entry.S3 = &AgentResourceS3Entry{
+			entry.S3 = &IntegrationS3Entry{
 				Bucket:   res.Spec.S3.Bucket,
 				Region:   res.Spec.S3.Region,
 				Endpoint: res.Spec.S3.Endpoint,
 				Prefix:   res.Spec.S3.Prefix,
 			}
 		}
-	case agentsv1alpha1.AgentResourceKindDocumentation:
+	case agentsv1alpha1.IntegrationKindDocumentation:
 		if res.Spec.Documentation != nil {
-			entry.Documentation = &AgentResourceDocumentationEntry{
+			entry.Documentation = &IntegrationDocumentationEntry{
 				URLs: res.Spec.Documentation.URLs,
 			}
 		}

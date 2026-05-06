@@ -324,21 +324,21 @@ type IngressTLS struct {
 }
 
 // -------------------------------------------------------------------
-// Agent resource bindings
+// Integration bindings
 // -------------------------------------------------------------------
 
-// AgentResourceBinding references an AgentResource CR from an Agent.
-type AgentResourceBinding struct {
-	// Name of the AgentResource CR to bind.
+// IntegrationBinding references an Integration CR from an Agent.
+type IntegrationBinding struct {
+	// Name of the Integration CR to bind.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Mark the resource as read-only for the agent (advisory, enforced by runtime).
+	// Mark the integration as read-only for the agent (advisory, enforced by runtime).
 	// +optional
 	ReadOnly bool `json:"readOnly,omitempty"`
 
-	// Automatically inject this resource context into every prompt
+	// Automatically inject this integration context into every prompt
 	// without requiring manual selection in the UI.
 	// +optional
 	AutoContext bool `json:"autoContext,omitempty"`

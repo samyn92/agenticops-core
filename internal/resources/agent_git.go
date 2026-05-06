@@ -65,10 +65,10 @@ type GitWorkspaceConfig struct {
 	GitLabBaseURL string
 }
 
-// ResolveGitWorkspace extracts git workspace configuration from an AgentResource.
+// ResolveGitWorkspace extracts git workspace configuration from an Integration.
 func ResolveGitWorkspace(
 	gitSpec *agentsv1alpha1.AgentRunGitSpec,
-	resource *agentsv1alpha1.AgentResource,
+	resource *agentsv1alpha1.Integration,
 ) (*GitWorkspaceConfig, error) {
 	cfg := &GitWorkspaceConfig{
 		Branch:      gitSpec.Branch,
@@ -77,9 +77,9 @@ func ResolveGitWorkspace(
 	}
 
 	switch resource.Spec.Kind {
-	case agentsv1alpha1.AgentResourceKindGitHubRepo:
+	case agentsv1alpha1.IntegrationKindGitHubRepo:
 		if resource.Spec.GitHub == nil {
-			return nil, fmt.Errorf("AgentResource %q kind is github-repo but spec.github is nil", resource.Name)
+			return nil, fmt.Errorf("Integration %q kind is github-repo but spec.github is nil", resource.Name)
 		}
 		gh := resource.Spec.GitHub
 		cfg.Provider = ProviderGitHub
@@ -95,9 +95,9 @@ func ResolveGitWorkspace(
 			cfg.CloneURL = fmt.Sprintf("%s/%s/%s.git", cfg.GitHubAPIURL, gh.Owner, gh.Repo)
 		}
 
-	case agentsv1alpha1.AgentResourceKindGitLabProject:
+	case agentsv1alpha1.IntegrationKindGitLabProject:
 		if resource.Spec.GitLab == nil {
-			return nil, fmt.Errorf("AgentResource %q kind is gitlab-project but spec.gitlab is nil", resource.Name)
+			return nil, fmt.Errorf("Integration %q kind is gitlab-project but spec.gitlab is nil", resource.Name)
 		}
 		gl := resource.Spec.GitLab
 		cfg.Provider = ProviderGitLab
@@ -108,9 +108,9 @@ func ResolveGitWorkspace(
 			cfg.BaseBranch = gl.DefaultBranch
 		}
 
-	case agentsv1alpha1.AgentResourceKindGitRepo:
+	case agentsv1alpha1.IntegrationKindGitRepo:
 		if resource.Spec.Git == nil {
-			return nil, fmt.Errorf("AgentResource %q kind is git-repo but spec.git is nil", resource.Name)
+			return nil, fmt.Errorf("Integration %q kind is git-repo but spec.git is nil", resource.Name)
 		}
 		cfg.Provider = ProviderGit
 		cfg.CloneURL = resource.Spec.Git.URL
@@ -119,7 +119,7 @@ func ResolveGitWorkspace(
 		}
 
 	default:
-		return nil, fmt.Errorf("AgentResource %q kind %q is not a git resource", resource.Name, resource.Spec.Kind)
+		return nil, fmt.Errorf("Integration %q kind %q is not a git resource", resource.Name, resource.Spec.Kind)
 	}
 
 	// Default base branch

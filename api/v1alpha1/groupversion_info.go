@@ -35,7 +35,7 @@ var (
 			&Agent{}, &AgentList{},
 			&AgentRun{}, &AgentRunList{},
 			&AgentTool{}, &AgentToolList{},
-			&AgentResource{}, &AgentResourceList{},
+			&Integration{}, &IntegrationList{},
 			&Channel{}, &ChannelList{},
 			&Provider{}, &ProviderList{},
 		)

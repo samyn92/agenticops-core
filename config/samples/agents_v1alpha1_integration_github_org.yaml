@@ -1,5 +1,5 @@
 apiVersion: agents.agentops.io/v1alpha1
-kind: AgentResource
+kind: Integration
 metadata:
   name: samyn92-github
   namespace: agents

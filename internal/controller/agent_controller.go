@@ -50,7 +50,7 @@ type AgentReconciler struct {
 // +kubebuilder:rbac:groups=agents.agentops.io,resources=agents/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=agents.agentops.io,resources=agents/finalizers,verbs=update
 // +kubebuilder:rbac:groups=agents.agentops.io,resources=agenttools,verbs=get;list;watch
-// +kubebuilder:rbac:groups=agents.agentops.io,resources=agentresources,verbs=get;list;watch
+// +kubebuilder:rbac:groups=agents.agentops.io,resources=integrations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=agents.agentops.io,resources=providers,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
@@ -124,8 +124,8 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		})
 	}
 
-	// Resolve referenced AgentResources
-	agentResources, err := r.resolveAgentResources(ctx, agent)
+	// Resolve referenced Integrations
+	integrations, err := r.resolveIntegrations(ctx, agent)
 	if err != nil {
 		r.setAgentFailedStatus(agent, agentsv1alpha1.AgentPhaseFailed, err.Error())
 		if patchErr := patchStatus(ctx, r.Client, agent, statusPatch); patchErr != nil {
@@ -134,8 +134,8 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// Validate AgentResources are ready
-	if err := r.validateAgentResourcesReady(agentResources); err != nil {
+	// Validate Integrations are ready
+	if err := r.validateIntegrationsReady(integrations); err != nil {
 		meta.SetStatusCondition(&agent.Status.Conditions, metav1.Condition{
 			Type:    agentsv1alpha1.AgentConditionResourcesReady,
 			Status:  metav1.ConditionFalse,
@@ -148,13 +148,13 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{RequeueAfter: requeueInterval}, nil
 	}
 
-	// Set ResourcesReady condition
-	if len(agent.Spec.ResourceBindings) > 0 {
+	// Set IntegrationsReady condition
+	if len(agent.Spec.Integrations) > 0 {
 		meta.SetStatusCondition(&agent.Status.Conditions, metav1.Condition{
 			Type:    agentsv1alpha1.AgentConditionResourcesReady,
 			Status:  metav1.ConditionTrue,
 			Reason:  "AllReady",
-			Message: fmt.Sprintf("%d resources bound", len(agentResources)),
+			Message: fmt.Sprintf("%d resources bound", len(integrations)),
 		})
 	}
 
@@ -209,9 +209,9 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	switch agent.Spec.Mode {
 	case agentsv1alpha1.AgentModeDaemon:
-		result, reconcileErr = r.reconcileDaemon(ctx, agent, agentTools, agentResources, resolvedProviders)
+		result, reconcileErr = r.reconcileDaemon(ctx, agent, agentTools, integrations, resolvedProviders)
 	case agentsv1alpha1.AgentModeTask:
-		result, reconcileErr = r.reconcileTask(ctx, agent, agentTools, agentResources, resolvedProviders)
+		result, reconcileErr = r.reconcileTask(ctx, agent, agentTools, integrations, resolvedProviders)
 	default:
 		return ctrl.Result{}, fmt.Errorf("unknown agent mode: %s", agent.Spec.Mode)
 	}
@@ -241,7 +241,7 @@ func hasMCPSourceTools(agentTools []agentsv1alpha1.AgentTool) bool {
 // reconcileDaemon handles daemon mode: RBAC -> PVC -> ConfigMaps -> Deployment -> Service -> NetworkPolicy -> status.
 //
 //nolint:unparam // Result is always nil for now but will be used for requeue logic.
-func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.AgentTool, agentResources []agentsv1alpha1.AgentResource, providers []agentsv1alpha1.Provider) (ctrl.Result, error) {
+func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.AgentTool, integrations []agentsv1alpha1.Integration, providers []agentsv1alpha1.Provider) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// 0. RBAC — already reconciled early in Reconcile() before tool
@@ -257,7 +257,7 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 	}
 
 	// 2. Operator extension ConfigMap
-	configMap, err := resources.BuildAgentConfigMap(agent, agentResources, agentTools, providers)
+	configMap, err := resources.BuildAgentConfigMap(agent, integrations, agentTools, providers)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -358,13 +358,13 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 // reconcileTask handles task mode: RBAC -> ConfigMaps -> status (Ready).
 //
 //nolint:unparam // Result is always nil for now but will be used for requeue logic.
-func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.AgentTool, agentResources []agentsv1alpha1.AgentResource, providers []agentsv1alpha1.Provider) (ctrl.Result, error) {
+func (r *AgentReconciler) reconcileTask(ctx context.Context, agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.AgentTool, integrations []agentsv1alpha1.Integration, providers []agentsv1alpha1.Provider) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// 0. RBAC — already reconciled early in Reconcile().
 
 	// 1. Operator extension ConfigMap
-	configMap, err := resources.BuildAgentConfigMap(agent, agentResources, agentTools, providers)
+	configMap, err := resources.BuildAgentConfigMap(agent, integrations, agentTools, providers)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -451,17 +451,17 @@ func (r *AgentReconciler) resolveAgentTools(ctx context.Context, agent *agentsv1
 	return tools, nil
 }
 
-// resolveAgentResources fetches all AgentResource CRs referenced by the agent.
-func (r *AgentReconciler) resolveAgentResources(ctx context.Context, agent *agentsv1alpha1.Agent) ([]agentsv1alpha1.AgentResource, error) {
-	agentRes := make([]agentsv1alpha1.AgentResource, 0, len(agent.Spec.ResourceBindings))
-	for _, binding := range agent.Spec.ResourceBindings {
-		res := &agentsv1alpha1.AgentResource{}
+// resolveIntegrations fetches all Integration CRs referenced by the agent.
+func (r *AgentReconciler) resolveIntegrations(ctx context.Context, agent *agentsv1alpha1.Agent) ([]agentsv1alpha1.Integration, error) {
+	integrations := make([]agentsv1alpha1.Integration, 0, len(agent.Spec.Integrations))
+	for _, binding := range agent.Spec.Integrations {
+		res := &agentsv1alpha1.Integration{}
 		if err := r.Get(ctx, types.NamespacedName{Name: binding.Name, Namespace: agent.Namespace}, res); err != nil {
-			return nil, fmt.Errorf("AgentResource %q not found: %w", binding.Name, err)
+			return nil, fmt.Errorf("Integration %q not found: %w", binding.Name, err)
 		}
-		agentRes = append(agentRes, *res)
+		integrations = append(integrations, *res)
 	}
-	return agentRes, nil
+	return integrations, nil
 }
 
 // validateAgentToolsReady checks all referenced AgentTools are in Ready phase.
@@ -474,11 +474,11 @@ func (r *AgentReconciler) validateAgentToolsReady(tools []agentsv1alpha1.AgentTo
 	return nil
 }
 
-// validateAgentResourcesReady checks all referenced AgentResources are in Ready phase.
-func (r *AgentReconciler) validateAgentResourcesReady(agentRes []agentsv1alpha1.AgentResource) error {
-	for _, res := range agentRes {
-		if res.Status.Phase != agentsv1alpha1.AgentResourcePhaseReady {
-			return fmt.Errorf("AgentResource %q is not Ready (phase: %s)", res.Name, res.Status.Phase)
+// validateIntegrationsReady checks all referenced Integrations are in Ready phase.
+func (r *AgentReconciler) validateIntegrationsReady(integrations []agentsv1alpha1.Integration) error {
+	for _, res := range integrations {
+		if res.Status.Phase != agentsv1alpha1.IntegrationPhaseReady {
+			return fmt.Errorf("Integration %q is not Ready (phase: %s)", res.Name, res.Status.Phase)
 		}
 	}
 	return nil

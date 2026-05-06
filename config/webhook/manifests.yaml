@@ -30,26 +30,6 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-agents-agentops-io-v1alpha1-agentresource
-  failurePolicy: Fail
-  name: vagentresource.kb.io
-  rules:
-  - apiGroups:
-    - agents.agentops.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - agentresources
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: webhook-service
-      namespace: system
       path: /validate-agents-agentops-io-v1alpha1-agenttool
   failurePolicy: Fail
   name: vagenttool.kb.io
@@ -83,6 +63,26 @@ webhooks:
     - UPDATE
     resources:
     - channels
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-agents-agentops-io-v1alpha1-integration
+  failurePolicy: Fail
+  name: vintegration.kb.io
+  rules:
+  - apiGroups:
+    - agents.agentops.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - integrations
   sideEffects: None
 - admissionReviewVersions:
   - v1

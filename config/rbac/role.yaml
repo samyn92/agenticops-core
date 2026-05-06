@@ -32,11 +32,11 @@ rules:
 - apiGroups:
   - agents.agentops.io
   resources:
-  - agentresources
   - agentruns
   - agents
   - agenttools
   - channels
+  - integrations
   - providers
   verbs:
   - create
@@ -49,22 +49,22 @@ rules:
 - apiGroups:
   - agents.agentops.io
   resources:
-  - agentresources/finalizers
   - agentruns/finalizers
   - agents/finalizers
   - agenttools/finalizers
   - channels/finalizers
+  - integrations/finalizers
   - providers/finalizers
   verbs:
   - update
 - apiGroups:
   - agents.agentops.io
   resources:
-  - agentresources/status
   - agentruns/status
   - agents/status
   - agenttools/status
   - channels/status
+  - integrations/status
   - providers/status
   verbs:
   - get

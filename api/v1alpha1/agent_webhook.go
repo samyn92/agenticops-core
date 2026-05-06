@@ -76,7 +76,7 @@ func (r *Agent) validate() (admission.Warnings, error) {
 	allErrs = append(allErrs, r.validateTools(specPath)...)
 	errs, warnings := r.validateToolHooks(specPath)
 	allErrs = append(allErrs, errs...)
-	allErrs = append(allErrs, r.validateResourceBindings(specPath)...)
+	allErrs = append(allErrs, r.validateIntegrations(specPath)...)
 	allErrs = append(allErrs, r.validateSchedule(specPath)...)
 
 	if len(allErrs) > 0 {
@@ -238,22 +238,22 @@ func (r *Agent) validateToolHooks(specPath *field.Path) (field.ErrorList, admiss
 	return errs, warnings
 }
 
-func (r *Agent) validateResourceBindings(specPath *field.Path) field.ErrorList {
+func (r *Agent) validateIntegrations(specPath *field.Path) field.ErrorList {
 	var errs field.ErrorList
 
-	// Check for duplicate resource binding names
+	// Check for duplicate integration binding names
 	seen := make(map[string]bool)
-	for i, rb := range r.Spec.ResourceBindings {
+	for i, rb := range r.Spec.Integrations {
 		if rb.Name == "" {
 			errs = append(errs, field.Required(
-				specPath.Child("resourceBindings").Index(i).Child("name"),
-				"resource binding name is required"))
+				specPath.Child("integrations").Index(i).Child("name"),
+				"integration binding name is required"))
 			continue
 		}
 		if seen[rb.Name] {
 			errs = append(errs, field.Invalid(
-				specPath.Child("resourceBindings").Index(i).Child("name"), rb.Name,
-				"duplicate resource binding name"))
+				specPath.Child("integrations").Index(i).Child("name"), rb.Name,
+				"duplicate integration binding name"))
 		}
 		seen[rb.Name] = true
 	}

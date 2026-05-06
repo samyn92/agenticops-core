@@ -192,10 +192,10 @@ type AgentSpec struct {
 	// RESOURCES (accessible external resources)
 	// ====================================================================
 
-	// External resources (repos, groups, etc.) bound to this agent.
-	// Users can select bound resources in the console UI to scope prompts.
+	// Integrations (repos, platforms, etc.) bound to this agent.
+	// Users can select bound integrations in the console UI to scope prompts.
 	// +optional
-	ResourceBindings []AgentResourceBinding `json:"resourceBindings,omitempty"`
+	Integrations []IntegrationBinding `json:"integrations,omitempty"`
 
 	// ====================================================================
 	// TOOL HOOKS (defense-in-depth)

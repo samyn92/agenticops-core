@@ -148,11 +148,11 @@ type AgentRunOutcomeStatus struct {
 
 // AgentRunGitSpec configures a git workspace for a task agent run.
 type AgentRunGitSpec struct {
-	// Reference to an AgentResource CR (github-repo, gitlab-project, or git-repo)
+	// Reference to an Integration CR (github-repo, gitlab-project, or git-repo)
 	// that provides the repository URL and credentials.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
-	ResourceRef string `json:"resourceRef"`
+	IntegrationRef string `json:"integrationRef"`
 
 	// Feature branch to work on. Created from baseBranch if it doesn't exist.
 	// +kubebuilder:validation:Required

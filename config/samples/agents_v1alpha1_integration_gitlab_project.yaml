@@ -1,5 +1,5 @@
 apiVersion: agents.agentops.io/v1alpha1
-kind: AgentResource
+kind: Integration
 metadata:
   name: flux-repo
   namespace: agents
@@ -14,3 +14,13 @@ spec:
     baseURL: https://gitlab.com
     project: homecluster/flux
     defaultBranch: main
+  triggers:
+    - on: merge_request
+      actions: [open, update]
+      agentRef: mr-reviewer
+      prompt: |
+        Review merge request !{{.MR.IID}} in project {{.Project.PathWithNamespace}}.
+        Title: {{.MR.Title}}
+        Description: {{.MR.Description}}
+      git:
+        ref: "{{.MR.SourceBranch}}"

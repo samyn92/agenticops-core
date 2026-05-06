@@ -4,16 +4,16 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: agentresources.agents.agentops.io
+  name: integrations.agents.agentops.io
 spec:
   group: agents.agentops.io
   names:
-    kind: AgentResource
-    listKind: AgentResourceList
-    plural: agentresources
+    kind: Integration
+    listKind: IntegrationList
+    plural: integrations
     shortNames:
-    - ares
-    singular: agentresource
+    - intg
+    singular: integration
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -26,6 +26,10 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .spec.triggers
+      name: Triggers
+      priority: 1
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -33,11 +37,11 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          AgentResource is the Schema for the agentresources API.
-          A declarative catalog entry for an external resource (Git repo, GitLab group,
-          S3 bucket, documentation, etc.) that agents can work with.
-          Agents bind to resources via spec.resourceBindings, and users can select them
-          in the console UI to scope prompts.
+          Integration is the Schema for the integrations API.
+          A declarative connection to an external platform (Git repo, GitLab project,
+          GitHub repo, S3 bucket, etc.) that agents can work with. Includes optional
+          event-driven triggers that automatically create AgentRuns when matching
+          events occur on the platform.
         properties:
           apiVersion:
             description: |-
@@ -57,11 +61,11 @@ spec:
           metadata:
             type: object
           spec:
-            description: AgentResourceSpec defines the desired state of AgentResource.
+            description: IntegrationSpec defines the desired state of Integration.
             properties:
               credentials:
                 description: |-
-                  Optional credentials for accessing the resource.
+                  Optional credentials for accessing the platform.
                   The secret key usage is kind-specific (e.g. API token for GitHub/GitLab,
                   SSH key for git, AWS credentials for S3).
                 properties:
@@ -76,7 +80,7 @@ spec:
                 - name
                 type: object
               description:
-                description: Optional description of the resource for UI tooltips.
+                description: Optional description for UI tooltips.
                 type: string
               displayName:
                 description: Human-friendly display name shown in the console UI.
@@ -217,7 +221,8 @@ spec:
                 - group
                 type: object
               kind:
-                description: Kind of resource (e.g. github-repo, gitlab-group, git-repo).
+                description: Kind of integration (e.g. github-repo, gitlab-project,
+                  git-repo).
                 enum:
                 - github-repo
                 - github-org
@@ -246,12 +251,73 @@ spec:
                 required:
                 - bucket
                 type: object
+              triggers:
+                description: |-
+                  Event-driven triggers. When a matching event occurs on the platform,
+                  the operator creates an AgentRun for the specified agent.
+                items:
+                  description: |-
+                    IntegrationTrigger defines an event-driven trigger that creates AgentRuns
+                    when matching events occur on the platform.
+                  properties:
+                    actions:
+                      description: |-
+                        Actions to filter on (e.g. ["open", "update", "merge"]).
+                        Empty means all actions.
+                      items:
+                        type: string
+                      type: array
+                    agentRef:
+                      description: Name of the Agent CR to trigger.
+                      minLength: 1
+                      type: string
+                    git:
+                      description: |-
+                        Git workspace configuration for the triggered AgentRun.
+                        If set, the agent gets a cloned workspace with a feature branch.
+                      properties:
+                        baseBranch:
+                          description: Base branch for the PR/MR target. Defaults
+                            to the integration's default branch.
+                          type: string
+                        branch:
+                          description: |-
+                            Branch name template. Supports Go template with event data.
+                            Example: "agent/review-{{.object_attributes.iid}}"
+                          minLength: 1
+                          type: string
+                      required:
+                      - branch
+                      type: object
+                    labels:
+                      description: |-
+                        Labels to filter on. Event must have at least one matching label.
+                        Empty means no label filtering.
+                      items:
+                        type: string
+                      type: array
+                    "on":
+                      description: Event type to match (e.g. "merge_request", "pull_request",
+                        "push", "issue").
+                      minLength: 1
+                      type: string
+                    prompt:
+                      description: Go text/template rendered with event data as the
+                        prompt for the AgentRun.
+                      minLength: 1
+                      type: string
+                  required:
+                  - agentRef
+                  - "on"
+                  - prompt
+                  type: object
+                type: array
             required:
             - displayName
             - kind
             type: object
           status:
-            description: AgentResourceStatus defines the observed state of AgentResource.
+            description: IntegrationStatus defines the observed state of Integration.
             properties:
               conditions:
                 description: Standard conditions.
