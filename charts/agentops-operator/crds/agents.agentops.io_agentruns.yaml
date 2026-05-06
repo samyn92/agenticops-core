@@ -29,6 +29,12 @@ spec:
     - jsonPath: .status.mode
       name: Mode
       type: string
+    - jsonPath: .status.outcome.intent
+      name: Intent
+      type: string
+    - jsonPath: .status.outcome.artifacts[0].url
+      name: Artifact
+      type: string
     - jsonPath: .status.tokensUsed
       name: Tokens
       type: integer
@@ -90,6 +96,22 @@ spec:
                 - branch
                 - resourceRef
                 type: object
+              outcome:
+                description: |-
+                  Outcome lets the caller hint the expected intent of the run.
+                  The executing agent finalizes the actual intent in status.outcome.
+                properties:
+                  intent:
+                    description: Hinted intent. The executing agent may override in
+                      status.outcome.intent.
+                    enum:
+                    - change
+                    - plan
+                    - incident
+                    - discovery
+                    - noop
+                    type: string
+                type: object
               prompt:
                 description: Prompt to send to the agent.
                 minLength: 1
@@ -113,12 +135,6 @@ spec:
           status:
             description: AgentRunStatus defines the observed state of AgentRun.
             properties:
-              branch:
-                description: Git branch the agent worked on.
-                type: string
-              commits:
-                description: Number of commits pushed by the agent during this run.
-                type: integer
               completionTime:
                 description: When execution completed.
                 format: date-time
@@ -196,16 +212,72 @@ spec:
                 description: Actual model used (may differ from agent's primary if
                   fallback triggered).
                 type: string
+              outcome:
+                description: |-
+                  Outcome is the authoritative result of the run, written by the
+                  executing agent at end-of-run via the run_finish built-in tool.
+                  Replaces the legacy pullRequestURL/branch/commits fields — git
+                  artifacts now appear in outcome.artifacts as kind=pr/mr/commit.
+                properties:
+                  artifacts:
+                    description: |-
+                      Artifacts produced by the run. Append-only during the run; frozen
+                      once status.phase is terminal (Succeeded or Failed).
+                    items:
+                      description: AgentRunArtifact describes a durable external reference
+                        produced by the run.
+                      properties:
+                        kind:
+                          description: Kind of artifact.
+                          enum:
+                          - pr
+                          - mr
+                          - issue
+                          - memory
+                          - commit
+                          type: string
+                        provider:
+                          description: Forge provider (github, gitlab, memory, ...).
+                          type: string
+                        ref:
+                          description: Identifier within the provider (PR number,
+                            issue number, memory id, sha).
+                          type: string
+                        title:
+                          description: Short human title rendered in the console Run
+                            card.
+                          type: string
+                        url:
+                          description: Fully-qualified URL — where a human clicks.
+                          type: string
+                      required:
+                      - kind
+                      type: object
+                    type: array
+                  intent:
+                    description: |-
+                      Finalized intent. Authoritative — overrides spec.outcome.intent.
+                      Console falls back to spec value when this is empty (run still in flight).
+                      Set once at end-of-run; immutable thereafter.
+                    enum:
+                    - change
+                    - plan
+                    - incident
+                    - discovery
+                    - noop
+                    type: string
+                  summary:
+                    description: |-
+                      Short summary (1-3 sentences) written by the executing agent at
+                      end-of-run, for rendering in the Run sidebar card.
+                    type: string
+                type: object
               output:
                 description: Textual output from the agent run.
                 type: string
               phase:
                 description: 'Current phase: Pending, Queued, Running, Succeeded,
                   Failed.'
-                type: string
-              pullRequestURL:
-                description: URL of the pull request / merge request created or updated
-                  by the agent.
                 type: string
               startTime:
                 description: When execution started.
@@ -217,6 +289,9 @@ spec:
               toolCalls:
                 description: Number of tool calls made during execution.
                 type: integer
+              traceID:
+                description: OpenTelemetry trace ID for this run (hex-encoded 128-bit).
+                type: string
             type: object
         type: object
     served: true

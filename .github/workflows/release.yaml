@@ -297,12 +297,47 @@ jobs:
   helm-chart:
     name: Release Helm Chart
     needs: [operator-check]
-    uses: samyn92/.github/.github/workflows/helm-release.yaml@main
-    with:
-      chart-path: charts/agentops-operator
-      upload-artifact: true
-    secrets:
-      registry-token: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Sync CRDs into chart
+        run: make sync-crds
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Extract chart name
+        id: meta
+        run: |
+          CHART_NAME=$(grep '^name:' charts/agentops-operator/Chart.yaml | awk '{print $2}')
+          echo "chart-name=${CHART_NAME}" >> "$GITHUB_OUTPUT"
+          echo "artifact=${CHART_NAME}-${{ steps.version.outputs.version }}.tgz" >> "$GITHUB_OUTPUT"
+      - name: Set chart version and appVersion
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.version }}/" charts/agentops-operator/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/agentops-operator/Chart.yaml
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Helm Lint
+        run: helm lint charts/agentops-operator
+      - name: Helm Package
+        run: helm package charts/agentops-operator --destination dist/
+      - name: Push Helm chart to OCI registry
+        run: helm push dist/${{ steps.meta.outputs.artifact }} oci://ghcr.io/samyn92/charts
+      - name: Upload chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart
+          path: dist/${{ steps.meta.outputs.artifact }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      chart-artifact: ${{ steps.meta.outputs.artifact }}
 
   # =========================================================================
   # GitHub Release with CRD manifests + Helm chart

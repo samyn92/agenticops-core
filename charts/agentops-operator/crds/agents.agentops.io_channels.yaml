@@ -189,7 +189,7 @@ spec:
                       Claims lists the names of resources, defined in spec.resourceClaims,
                       that are used by this container.
 
-                      This is an alpha field and requires enabling the
+                      This field depends on the
                       DynamicResourceAllocation feature gate.
 
                       This field is immutable. It can only be set for containers.
@@ -327,7 +327,6 @@ spec:
                           procMount denotes the type of proc mount to use for the containers.
                           The default value is Default which uses the container runtime defaults for
                           readonly paths and masked paths.
-                          This requires the ProcMountType feature flag to be enabled.
                           Note that this field cannot be set when spec.os.name is windows.
                         type: string
                       readOnlyRootFilesystem:
@@ -763,10 +762,13 @@ spec:
                     description: TLS configuration.
                     properties:
                       clusterIssuer:
-                        description: Cert-manager cluster issuer name.
+                        description: Cert-manager cluster issuer name. Mutually exclusive
+                          with Issuer.
                         type: string
-                    required:
-                    - clusterIssuer
+                      issuer:
+                        description: Cert-manager namespaced issuer name. Mutually
+                          exclusive with ClusterIssuer.
+                        type: string
                     type: object
                 required:
                 - host

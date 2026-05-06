@@ -35,8 +35,8 @@ spec:
         description: |-
           AgentResource is the Schema for the agentresources API.
           A declarative catalog entry for an external resource (Git repo, GitLab group,
-          MCP endpoint, S3 bucket, documentation, etc.) that agents can work with.
-          Agents bind to resources via spec.resources, and users can select them
+          S3 bucket, documentation, etc.) that agents can work with.
+          Agents bind to resources via spec.resourceBindings, and users can select them
           in the console UI to scope prompts.
         properties:
           apiVersion:
@@ -217,40 +217,16 @@ spec:
                 - group
                 type: object
               kind:
-                description: Kind of resource (e.g. github-repo, gitlab-group, git-repo,
-                  mcp-endpoint).
+                description: Kind of resource (e.g. github-repo, gitlab-group, git-repo).
                 enum:
                 - github-repo
                 - github-org
                 - gitlab-project
                 - gitlab-group
                 - git-repo
-                - mcp-endpoint
                 - s3-bucket
                 - documentation
                 type: string
-              mcp:
-                description: 'MCP endpoint configuration (kind: mcp-endpoint).'
-                properties:
-                  headers:
-                    additionalProperties:
-                      type: string
-                    description: Static headers to send with requests.
-                    type: object
-                  transport:
-                    default: sse
-                    description: 'Transport type: sse or streamable-http.'
-                    enum:
-                    - sse
-                    - streamable-http
-                    type: string
-                  url:
-                    description: MCP server URL (SSE or streamable HTTP).
-                    minLength: 1
-                    type: string
-                required:
-                - url
-                type: object
               s3:
                 description: 'S3 bucket configuration (kind: s3-bucket).'
                 properties:

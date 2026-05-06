@@ -102,10 +102,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
           version: v3.17.3
+      - name: Verify CRDs in sync
+        run: |
+          make sync-crds
+          git diff --exit-code charts/agentops-operator/crds/ || \
+            (echo "ERROR: Chart CRDs are out of sync. Run 'make sync-crds' and commit." && exit 1)
       - name: Helm Lint
         run: helm lint charts/agentops-operator
       - name: Helm Template

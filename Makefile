@@ -75,6 +75,10 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 
 ##@ Build
 
+.PHONY: sync-crds
+sync-crds: manifests ## Sync generated CRDs into the Helm chart for packaging.
+	cp config/crd/bases/*.yaml charts/agentops-operator/crds/
+
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
