@@ -314,8 +314,13 @@ type WebhookIngressConfig struct {
 
 // IngressTLS configures TLS for webhook ingress.
 type IngressTLS struct {
-	// Cert-manager cluster issuer name.
-	ClusterIssuer string `json:"clusterIssuer"`
+	// Cert-manager cluster issuer name. Mutually exclusive with Issuer.
+	// +optional
+	ClusterIssuer string `json:"clusterIssuer,omitempty"`
+
+	// Cert-manager namespaced issuer name. Mutually exclusive with ClusterIssuer.
+	// +optional
+	Issuer string `json:"issuer,omitempty"`
 }
 
 // -------------------------------------------------------------------

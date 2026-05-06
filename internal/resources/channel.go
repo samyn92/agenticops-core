@@ -64,6 +64,16 @@ func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Ag
 		env = append(env, corev1.EnvVar{Name: "PROMPT_TEMPLATE", Value: ch.Spec.Prompt})
 	}
 
+	// Inject POD_NAMESPACE from downward API (needed for AgentRun creation)
+	env = append(env, corev1.EnvVar{
+		Name: "POD_NAMESPACE",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.namespace",
+			},
+		},
+	})
+
 	// Platform-specific env vars
 	env = append(env, buildChannelPlatformEnv(ch)...)
 
@@ -100,9 +110,23 @@ func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Ag
 	ensureEphemeralStorage(&container.Resources)
 
 	podSpec := corev1.PodSpec{
-		Containers: []corev1.Container{container},
+		Containers:         []corev1.Container{container},
+		ServiceAccountName: ChannelServiceAccountName(ch),
 	}
-	ApplySecurity(&podSpec, "channel", ch.Spec.Security)
+
+	// Channel bridges in task mode need the SA token to create AgentRuns.
+	// Ensure automount is enabled even if security overrides are nil.
+	security := ch.Spec.Security
+	if agent.Spec.Mode == agentsv1alpha1.AgentModeTask {
+		if security == nil {
+			security = &agentsv1alpha1.SecurityOverrides{}
+		}
+		if security.AutomountServiceAccountToken == nil {
+			t := true
+			security.AutomountServiceAccountToken = &t
+		}
+	}
+	ApplySecurity(&podSpec, "channel", security)
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -288,11 +312,15 @@ func BuildChannelIngress(ch *agentsv1alpha1.Channel) *networkingv1.Ingress {
 				SecretName: fmt.Sprintf("%s-tls", ch.Name),
 			},
 		}
-		// cert-manager annotation
 		if ingress.Annotations == nil {
 			ingress.Annotations = make(map[string]string)
 		}
-		ingress.Annotations["cert-manager.io/cluster-issuer"] = webhook.TLS.ClusterIssuer
+		// cert-manager annotation: prefer namespaced Issuer, fall back to ClusterIssuer.
+		if webhook.TLS.Issuer != "" {
+			ingress.Annotations["cert-manager.io/issuer"] = webhook.TLS.Issuer
+		} else if webhook.TLS.ClusterIssuer != "" {
+			ingress.Annotations["cert-manager.io/cluster-issuer"] = webhook.TLS.ClusterIssuer
+		}
 	}
 
 	return ingress

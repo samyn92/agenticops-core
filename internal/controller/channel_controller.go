@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +51,8 @@ type ChannelReconciler struct {
 // +kubebuilder:rbac:groups=agents.agentops.io,resources=agents,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 
 func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -82,6 +85,20 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Surface any security override clamps before rendering the deployment.
 	setSecurityPolicyViolationsCondition(&channel.Status.Conditions,
 		resources.ComputeSecurityViolations(channel.Spec.Security))
+
+	// 0. RBAC (ServiceAccount + Role + RoleBinding for AgentRun creation)
+	sa := resources.BuildChannelServiceAccount(channel)
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, sa); err != nil {
+		return ctrl.Result{}, err
+	}
+	role := resources.BuildChannelRole(channel)
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, role); err != nil {
+		return ctrl.Result{}, err
+	}
+	rb := resources.BuildChannelRoleBinding(channel)
+	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, rb); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// 1. Deployment
 	deployment := resources.BuildChannelDeployment(channel, agent)
@@ -169,6 +186,9 @@ func (r *ChannelReconciler) setChannelFailedStatus(ch *agentsv1alpha1.Channel, m
 func (r *ChannelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&agentsv1alpha1.Channel{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&rbacv1.Role{}).
+		Owns(&rbacv1.RoleBinding{}).
 		Owns(&appsv1.Deployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).

@@ -83,6 +83,64 @@ func BuildAgentRole(agent *agentsv1alpha1.Agent) *rbacv1.Role {
 	}
 }
 
+// ChannelServiceAccountName returns the conventional ServiceAccount name for a channel bridge.
+func ChannelServiceAccountName(ch *agentsv1alpha1.Channel) string {
+	return ObjectName(ch.Name, "channel")
+}
+
+// BuildChannelServiceAccount creates a ServiceAccount for the channel bridge pod.
+func BuildChannelServiceAccount(ch *agentsv1alpha1.Channel) *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ChannelServiceAccountName(ch),
+			Namespace: ch.Namespace,
+			Labels:    CommonLabels(ch.Name, "channel"),
+		},
+	}
+}
+
+// BuildChannelRole creates a namespaced Role granting the channel bridge
+// permission to create AgentRun CRs (needed for task-mode agent routing).
+func BuildChannelRole(ch *agentsv1alpha1.Channel) *rbacv1.Role {
+	return &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ObjectName(ch.Name, "channel"),
+			Namespace: ch.Namespace,
+			Labels:    CommonLabels(ch.Name, "channel"),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"agents.agentops.io"},
+				Resources: []string{"agentruns"},
+				Verbs:     []string{"create"},
+			},
+		},
+	}
+}
+
+// BuildChannelRoleBinding binds the channel bridge ServiceAccount to its Role.
+func BuildChannelRoleBinding(ch *agentsv1alpha1.Channel) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ObjectName(ch.Name, "channel"),
+			Namespace: ch.Namespace,
+			Labels:    CommonLabels(ch.Name, "channel"),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Role",
+			Name:     ObjectName(ch.Name, "channel"),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      ChannelServiceAccountName(ch),
+				Namespace: ch.Namespace,
+			},
+		},
+	}
+}
+
 // BuildAgentRoleBinding creates a RoleBinding that binds the agent's
 // ServiceAccount to its namespaced Role.
 func BuildAgentRoleBinding(agent *agentsv1alpha1.Agent) *rbacv1.RoleBinding {
