@@ -762,10 +762,13 @@ spec:
                     description: TLS configuration.
                     properties:
                       clusterIssuer:
-                        description: Cert-manager cluster issuer name.
+                        description: Cert-manager cluster issuer name. Mutually exclusive
+                          with Issuer.
                         type: string
-                    required:
-                    - clusterIssuer
+                      issuer:
+                        description: Cert-manager namespaced issuer name. Mutually
+                          exclusive with ClusterIssuer.
+                        type: string
                     type: object
                 required:
                 - host
