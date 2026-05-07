@@ -133,6 +133,20 @@ func buildAgentPodSpec(agent *agentsv1alpha1.Agent, agentTools []agentsv1alpha1.
 
 	containers := append([]corev1.Container{mainContainer}, sidecars...)
 
+	// For task mode (Jobs), convert sidecars to native sidecar init containers
+	// (restartPolicy: Always) so they terminate when the main container exits.
+	// Requires Kubernetes 1.28+.
+	if taskMode && len(sidecars) > 0 {
+		restartAlways := corev1.ContainerRestartPolicyAlways
+		nativeSidecars := make([]corev1.Container, 0, len(sidecars))
+		for _, s := range sidecars {
+			s.RestartPolicy = &restartAlways
+			nativeSidecars = append(nativeSidecars, s)
+		}
+		initContainers = append(initContainers, nativeSidecars...)
+		containers = []corev1.Container{mainContainer}
+	}
+
 	podSpec := corev1.PodSpec{
 		InitContainers:     initContainers,
 		Containers:         containers,
