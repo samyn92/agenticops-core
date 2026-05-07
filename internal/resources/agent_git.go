@@ -18,12 +18,20 @@ package resources
 
 import (
 	"fmt"
+	"os"
 
 	agentsv1alpha1 "github.com/samyn92/agentops-core/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
-const (
+func getEnvOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+var (
 	// Container images for the platform-specific MCP tool servers.
 	// These are real container images (with rootfs, PATH, etc.) built from
 	// each server's Dockerfile — NOT the OCI artifacts pushed by `agent-tools push`.
@@ -33,9 +41,11 @@ const (
 	// go-git built into the runtime — no mcp-git sidecar needed.
 	// Platform tools (GitHub/GitLab) are loaded via init container + stdio exec
 	// — no gateway sidecar needed.
-	GitHubToolImage = "ghcr.io/samyn92/agent-tools/github-server:latest"
-	GitLabToolImage = "ghcr.io/samyn92/agent-tools/gitlab-server:latest"
+	GitHubToolImage = getEnvOrDefault("AGENTOPS_GITHUB_TOOL_IMAGE", "ghcr.io/samyn92/agent-tools/github-server:0.8.3")
+	GitLabToolImage = getEnvOrDefault("AGENTOPS_GITLAB_TOOL_IMAGE", "ghcr.io/samyn92/agent-tools/gitlab-server:0.8.3")
+)
 
+const (
 	// Git provider constants.
 	ProviderGitHub = "github"
 	ProviderGitLab = "gitlab"
