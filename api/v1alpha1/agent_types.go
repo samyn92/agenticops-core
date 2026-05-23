@@ -85,6 +85,17 @@ type AgentSpec struct {
 	// +kubebuilder:default=100
 	MaxSteps *int `json:"maxSteps,omitempty"`
 
+	// Maximum total tokens (input + output) consumed per agent invocation.
+	// When exceeded, the agent loop stops. Zero means no limit. Used for cost control.
+	// +optional
+	MaxTokensBudget *int64 `json:"maxTokensBudget,omitempty"`
+
+	// Number of retries on provider errors (429, 500, etc.) before trying fallback models.
+	// Default: 2.
+	// +optional
+	// +kubebuilder:default=2
+	MaxRetries *int `json:"maxRetries,omitempty"`
+
 	// ====================================================================
 	// MODEL
 	// ====================================================================

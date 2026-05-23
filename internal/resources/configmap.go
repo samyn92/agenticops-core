@@ -392,6 +392,8 @@ type AgentConfig struct {
 	Temperature        *float64               `json:"temperature,omitempty"`
 	MaxOutputTokens    *int64                 `json:"maxOutputTokens,omitempty"`
 	MaxSteps           *int                   `json:"maxSteps,omitempty"`
+	MaxTokensBudget    *int64                 `json:"maxTokensBudget,omitempty"`
+	MaxRetries         *int                   `json:"maxRetries,omitempty"`
 	MaxToolResultChars int                    `json:"maxToolResultChars,omitempty"`
 	BudgetFraction     *float64               `json:"budgetFraction,omitempty"`
 	PermissionTools    []string               `json:"permissionTools,omitempty"`
@@ -418,6 +420,8 @@ func BuildAgentConfigMap(agent *agentsv1alpha1.Agent, integrations []agentsv1alp
 		Temperature:        agent.Spec.Temperature,
 		MaxOutputTokens:    agent.Spec.MaxOutputTokens,
 		MaxSteps:           agent.Spec.MaxSteps,
+		MaxTokensBudget:    agent.Spec.MaxTokensBudget,
+		MaxRetries:         agent.Spec.MaxRetries,
 		PermissionTools:    agent.Spec.PermissionTools,
 		EnableQuestionTool: agent.Spec.EnableQuestionTool,
 	}

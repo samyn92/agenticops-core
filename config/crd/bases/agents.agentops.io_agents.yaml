@@ -193,10 +193,22 @@ spec:
                 description: Maximum output tokens per model call.
                 format: int64
                 type: integer
+              maxRetries:
+                default: 2
+                description: |-
+                  Number of retries on provider errors (429, 500, etc.) before trying fallback models.
+                  Default: 2.
+                type: integer
               maxSteps:
                 default: 100
                 description: Maximum agent loop steps (safety limit to prevent infinite
                   loops).
+                type: integer
+              maxTokensBudget:
+                description: |-
+                  Maximum total tokens (input + output) consumed per agent invocation.
+                  When exceeded, the agent loop stops. Zero means no limit. Used for cost control.
+                format: int64
                 type: integer
               memory:
                 description: |-
