@@ -193,10 +193,22 @@ spec:
                 description: Maximum output tokens per model call.
                 format: int64
                 type: integer
+              maxRetries:
+                default: 2
+                description: |-
+                  Number of retries on provider errors (429, 500, etc.) before trying fallback models.
+                  Default: 2.
+                type: integer
               maxSteps:
                 default: 100
                 description: Maximum agent loop steps (safety limit to prevent infinite
                   loops).
+                type: integer
+              maxTokensBudget:
+                description: |-
+                  Maximum total tokens (input + output) consumed per agent invocation.
+                  When exceeded, the agent loop stops. Zero means no limit. Used for cost control.
+                format: int64
                 type: integer
               memory:
                 description: |-
@@ -236,10 +248,8 @@ spec:
                     type: string
                   serverRef:
                     description: |-
-                      Reference to the memory server. Can be an AgentTool CR name
-                      (with mcpServer/mcpEndpoint source) or a plain service name.
-                      The runtime connects to Engram's REST API via the resolved
-                      service URL.
+                      Reference to the memory server. A plain Kubernetes service name
+                      in the same namespace (e.g. "engram" resolves to http://engram.<ns>.svc:7437).
                     minLength: 1
                     type: string
                 required:
@@ -489,9 +499,8 @@ spec:
                   container:
                     description: |-
                       Container-level overrides applied to the workload's main container
-                      only. Init containers and operator-injected sidecars (mcp-gateway,
-                      token-injector) always use the restricted defaults. Cannot enable
-                      privilege escalation, disable RO rootfs, disable RunAsNonRoot,
+                      only. Init containers always use the restricted defaults. Cannot
+                      enable privilege escalation, disable RO rootfs, disable RunAsNonRoot,
                       or add capabilities.
                     properties:
                       allowPrivilegeEscalation:
@@ -1039,48 +1048,87 @@ spec:
                 type: object
               tools:
                 description: |-
-                  Tool bindings referencing AgentTool CRs. Each binding names an
-                  AgentTool and allows per-agent permission overrides.
+                  Tool bindings. Each entry is an OCI artifact containing an MCP tool
+                  server binary. The operator generates crane init-containers to pull
+                  them and the runtime discovers them via loadOCITools().
                 items:
-                  description: AgentToolBinding references an AgentTool CR with optional
-                    per-agent overrides.
+                  description: |-
+                    ToolBinding describes an MCP tool server to load into the agent pod.
+                    Each tool is an OCI artifact containing a binary + manifest.json.
+                    The operator generates a crane init-container to pull the artifact
+                    and the runtime discovers it via loadOCITools() (stdio MCP).
                   properties:
-                    autoContext:
-                      description: Auto-inject skill content into every prompt (skill
-                        sources only).
-                      type: boolean
-                    directTools:
-                      description: MCP tools to promote to first-class (mcpServer/mcpEndpoint
-                        sources only).
+                    category:
+                      description: Category for UI grouping (e.g. "git", "kubernetes",
+                        "observability").
+                      type: string
+                    description:
+                      description: Human-readable description shown in the console
+                        UI.
+                      type: string
+                    env:
+                      description: |-
+                        Extra environment variables injected into the runtime container
+                        for this tool (e.g. HELM_REGISTRIES, KUBECONFIG).
                       items:
-                        type: string
+                        description: ToolEnvVar is a plain-text environment variable
+                          for a tool.
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        required:
+                        - name
+                        - value
+                        type: object
                       type: array
                     name:
-                      description: Name of the AgentTool CR.
+                      description: Unique name for this tool (used as directory name
+                        under /tools/).
                       minLength: 1
                       type: string
-                    permissions:
-                      description: Override permissions from AgentTool defaults.
+                    oci:
+                      description: OCI artifact reference containing the MCP tool
+                        server binary.
                       properties:
-                        mode:
-                          description: 'Mode: "deny" blocks matching rules, "allow"
-                            only permits matching rules.'
-                          enum:
-                          - deny
-                          - allow
+                        digest:
+                          description: Optional digest for pinning (e.g. sha256:abc...).
                           type: string
-                        rules:
-                          description: Rules in the form "tool_name", "tool_name:arg=value",
-                            or "tool_name:arg=pattern*".
-                          items:
-                            type: string
-                          type: array
+                        pullPolicy:
+                          description: 'Pull policy: Always, IfNotPresent, Never.
+                            Defaults based on tag.'
+                          enum:
+                          - Always
+                          - IfNotPresent
+                          - Never
+                          type: string
+                        pullSecret:
+                          description: Optional pull secret for private registries.
+                          properties:
+                            key:
+                              description: Key within the Secret.
+                              type: string
+                            name:
+                              description: Name of the Secret.
+                              type: string
+                          required:
+                          - key
+                          - name
+                          type: object
+                        ref:
+                          description: Full OCI reference (e.g. ghcr.io/org/tool:1.0.0).
+                          type: string
                       required:
-                      - mode
-                      - rules
+                      - ref
                       type: object
+                    uiHint:
+                      description: UI hint for icon/styling (e.g. "gitlab", "helm",
+                        "kubectl").
+                      type: string
                   required:
                   - name
+                  - oci
                   type: object
                 type: array
             required:

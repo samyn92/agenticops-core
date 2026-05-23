@@ -253,9 +253,8 @@ spec:
                   container:
                     description: |-
                       Container-level overrides applied to the workload's main container
-                      only. Init containers and operator-injected sidecars (mcp-gateway,
-                      token-injector) always use the restricted defaults. Cannot enable
-                      privilege escalation, disable RO rootfs, disable RunAsNonRoot,
+                      only. Init containers always use the restricted defaults. Cannot
+                      enable privilege escalation, disable RO rootfs, disable RunAsNonRoot,
                       or add capabilities.
                     properties:
                       allowPrivilegeEscalation:
