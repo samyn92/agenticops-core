@@ -43,8 +43,8 @@ kubectl config use-context k3s
 - `agents.agents.agentops.io` (short: `ag`)
 - `agentruns.agents.agentops.io` (short: `ar`)
 - `channels.agents.agentops.io` (short: `ch`)
-- `agenttools.agents.agentops.io`
-- `agentresources.agents.agentops.io`
+- `providers.agents.agentops.io` (short: `prov`)
+- `integrations.agents.agentops.io` (short: `intg`)
 
 ### Namespaces
 
@@ -65,6 +65,13 @@ The runtime is developed in the standalone repo `agentops-runtime`.
 | `ghcr.io/samyn92/agentops-operator` | `Dockerfile` (repo root) | Kubernetes operator |
 | `ghcr.io/samyn92/agentops-runtime-fantasy` | `agentops-runtime` repo | Fantasy SDK agent runtime |
 | `ghcr.io/samyn92/mcp-gateway` | `images/mcp-gateway/` | MCP protocol gateway (spawn + proxy modes) |
+
+> **Runtime compatibility (release checklist):** `Agent.spec.image` has no CRD
+> schema default. Agents created without an explicit image fall back to
+> `DefaultFantasyImage` (`api/v1alpha1/agent_types.go`), applied by the operator
+> at reconcile time. This pin is a compatibility contract — every operator
+> release MUST consciously bump it to a known-good `agentops-runtime-fantasy`
+> tag and note the runtime version in the release notes. Never use `:latest`.
 
 ### Related Repos
 

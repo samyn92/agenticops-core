@@ -41,6 +41,7 @@ const (
 )
 
 // AgentSpec defines the desired state of Agent.
+// +kubebuilder:validation:XValidation:rule="self.mode != 'task' || !has(self.storage)",message="storage is not allowed for task-mode agents"
 type AgentSpec struct {
 
 	// ====================================================================
@@ -48,7 +49,9 @@ type AgentSpec struct {
 	// ====================================================================
 
 	// Mode: daemon (Deployment+PVC+Service) or task (Job template).
+	// Immutable after creation — switching mode changes the entire workload topology.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="mode is immutable"
 	Mode AgentMode `json:"mode"`
 
 	// ====================================================================
@@ -56,8 +59,11 @@ type AgentSpec struct {
 	// ====================================================================
 
 	// Container image for the Fantasy agent runtime.
+	// When omitted, the operator defaults to DefaultFantasyImage (pinned per
+	// operator release). The default is applied at reconcile time, not by the
+	// API server, so spec.image stays empty in stored objects and an operator
+	// upgrade that bumps the default takes effect on existing agents.
 	// +optional
-	// +kubebuilder:default="ghcr.io/samyn92/agent-runtime-fantasy:latest"
 	Image string `json:"image,omitempty"`
 
 	// Image pull policy.
@@ -191,10 +197,10 @@ type AgentSpec struct {
 	Storage *StorageSpec `json:"storage,omitempty"`
 
 	// ====================================================================
-	// MEMORY (Engram integration)
+	// MEMORY (agentops-memory integration)
 	// ====================================================================
 
-	// Memory configuration for the Engram shared memory system.
+	// Memory configuration for the agentops-memory shared memory system.
 	// When set, the runtime injects recent context and enables
 	// memory MCP tools (mem_save, mem_search, etc.).
 	// +optional
@@ -351,8 +357,15 @@ func (a *Agent) BuiltinToolCount() int {
 	return len(a.Spec.BuiltinTools)
 }
 
-// Default image for the Fantasy runtime.
-const DefaultFantasyImage = "ghcr.io/samyn92/agent-runtime-fantasy:latest"
+// DefaultFantasyImage is the agent runtime image used when spec.image is empty.
+//
+// RELEASE COUPLING: this pin is a runtime-compatibility contract. The operator
+// asserts that agents created without an explicit image work against this exact
+// runtime version. Every operator/platform release MUST consciously bump this to
+// a known-good agentops-runtime tag and document the runtime compatibility in the
+// release notes. Do NOT use a floating tag (":latest") — combined with the default
+// IfNotPresent pull policy it causes silent, per-node version skew.
+const DefaultFantasyImage = "ghcr.io/samyn92/agentops-runtime-fantasy:0.17.1"
 
 // +kubebuilder:object:root=true
 

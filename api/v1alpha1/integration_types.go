@@ -91,6 +91,13 @@ type IntegrationTriggerGit struct {
 }
 
 // IntegrationSpec defines the desired state of Integration.
+// +kubebuilder:validation:XValidation:rule="self.kind != 'github-repo' || has(self.github)",message="github config is required for kind=github-repo"
+// +kubebuilder:validation:XValidation:rule="self.kind != 'github-org' || has(self.githubOrg)",message="githubOrg config is required for kind=github-org"
+// +kubebuilder:validation:XValidation:rule="self.kind != 'gitlab-project' || has(self.gitlab)",message="gitlab config is required for kind=gitlab-project"
+// +kubebuilder:validation:XValidation:rule="self.kind != 'gitlab-group' || has(self.gitlabGroup)",message="gitlabGroup config is required for kind=gitlab-group"
+// +kubebuilder:validation:XValidation:rule="self.kind != 'git-repo' || has(self.git)",message="git config is required for kind=git-repo"
+// +kubebuilder:validation:XValidation:rule="self.kind != 's3-bucket' || has(self.s3)",message="s3 config is required for kind=s3-bucket"
+// +kubebuilder:validation:XValidation:rule="self.kind != 'documentation' || has(self.documentation)",message="documentation config is required for kind=documentation"
 type IntegrationSpec struct {
 
 	// ====================================================================
@@ -98,7 +105,9 @@ type IntegrationSpec struct {
 	// ====================================================================
 
 	// Kind of integration (e.g. github-repo, gitlab-project, git-repo).
+	// Immutable after creation.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="kind is immutable"
 	Kind IntegrationKind `json:"kind"`
 
 	// Human-friendly display name shown in the console UI.
@@ -305,7 +314,13 @@ type IntegrationStatus struct {
 const (
 	// IntegrationConditionReady indicates the integration is validated and usable.
 	IntegrationConditionReady = "Ready"
+	// IntegrationConditionInUse indicates one or more Agents still bind this
+	// Integration, blocking deletion until those bindings are removed.
+	IntegrationConditionInUse = "InUse"
 )
+
+// IntegrationFinalizer protects an Integration from deletion while Agents still bind it.
+const IntegrationFinalizer = "agents.agentops.io/integration-protection"
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

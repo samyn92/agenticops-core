@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	agentsv1alpha1 "github.com/samyn92/agentops-core/api/v1alpha1"
@@ -51,6 +52,19 @@ func (r *IntegrationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Handle deletion: block while Agents still bind this Integration.
+	if !res.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, res)
+	}
+
+	// Ensure the deletion-protection finalizer is present.
+	if controllerutil.AddFinalizer(res, agentsv1alpha1.IntegrationFinalizer) {
+		if err := r.Update(ctx, res); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Save a copy for status patch comparison
@@ -84,6 +98,63 @@ func (r *IntegrationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// reconcileDelete blocks Integration deletion while Agents still bind it.
+// The finalizer is only removed once no Agent references this Integration via
+// spec.integrations, preventing silent breakage of agents mid-flight.
+func (r *IntegrationReconciler) reconcileDelete(ctx context.Context, res *agentsv1alpha1.Integration) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	if !controllerutil.ContainsFinalizer(res, agentsv1alpha1.IntegrationFinalizer) {
+		return ctrl.Result{}, nil
+	}
+
+	boundAgents, err := r.countBoundAgents(ctx, res)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if boundAgents > 0 {
+		log.Info("Integration deletion blocked: still bound by agents",
+			"name", res.Name, "boundAgents", boundAgents)
+		statusPatch := client.MergeFrom(res.DeepCopy())
+		meta.SetStatusCondition(&res.Status.Conditions, metav1.Condition{
+			Type:    agentsv1alpha1.IntegrationConditionInUse,
+			Status:  metav1.ConditionTrue,
+			Reason:  "BoundByAgents",
+			Message: fmt.Sprintf("deletion blocked: %d agent(s) still bind this integration", boundAgents),
+		})
+		if err := patchStatus(ctx, r.Client, res, statusPatch); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: requeueInterval}, nil
+	}
+
+	log.Info("Integration deletion allowed: no bound agents, removing finalizer", "name", res.Name)
+	controllerutil.RemoveFinalizer(res, agentsv1alpha1.IntegrationFinalizer)
+	if err := r.Update(ctx, res); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+// countBoundAgents counts Agents that bind this Integration via spec.integrations.
+func (r *IntegrationReconciler) countBoundAgents(ctx context.Context, res *agentsv1alpha1.Integration) (int, error) {
+	agents := &agentsv1alpha1.AgentList{}
+	if err := r.List(ctx, agents, client.InNamespace(res.Namespace)); err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, agent := range agents.Items {
+		for _, b := range agent.Spec.Integrations {
+			if b.Name == res.Name {
+				count++
+				break
+			}
+		}
+	}
+	return count, nil
 }
 
 // validateResource performs basic validation that the kind-specific config is present.

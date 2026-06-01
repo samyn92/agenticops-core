@@ -47,7 +47,7 @@ import (
 // RestrictedRunAsUser is the default non-root UID used by every
 // operator-built container when no explicit user is configured. It matches
 // the distroless `nonroot` UID used by all of our images (mcp-gateway,
-// token-injector, channel-*, agent-runtime-fantasy from v0.15.0).
+// channel-*, agentops-runtime-fantasy from v0.15.0).
 const RestrictedRunAsUser int64 = 65532
 
 // ====================================================================

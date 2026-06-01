@@ -153,8 +153,12 @@ spec:
                   type: string
                 type: array
               image:
-                default: ghcr.io/samyn92/agent-runtime-fantasy:latest
-                description: Container image for the Fantasy agent runtime.
+                description: |-
+                  Container image for the Fantasy agent runtime.
+                  When omitted, the operator defaults to DefaultFantasyImage (pinned per
+                  operator release). The default is applied at reconcile time, not by the
+                  API server, so spec.image stays empty in stored objects and an operator
+                  upgrade that bumps the default takes effect on existing agents.
                 type: string
               imagePullPolicy:
                 default: IfNotPresent
@@ -212,7 +216,7 @@ spec:
                 type: integer
               memory:
                 description: |-
-                  Memory configuration for the Engram shared memory system.
+                  Memory configuration for the agentops-memory shared memory system.
                   When set, the runtime injects recent context and enables
                   memory MCP tools (mem_save, mem_search, etc.).
                 properties:
@@ -243,24 +247,30 @@ spec:
                     type: integer
                   project:
                     description: |-
-                      Project name used to scope memories in Engram.
+                      Project name used to scope memories in agentops-memory.
                       Defaults to the Agent CR name if unset.
                     type: string
                   serverRef:
                     description: |-
                       Reference to the memory server. A plain Kubernetes service name
-                      in the same namespace (e.g. "engram" resolves to http://engram.<ns>.svc:7437).
+                      in the same namespace (e.g. "agentops-memory" resolves to
+                      http://agentops-memory.<ns>.svc:7437).
                     minLength: 1
                     type: string
                 required:
                 - serverRef
                 type: object
               mode:
-                description: 'Mode: daemon (Deployment+PVC+Service) or task (Job template).'
+                description: |-
+                  Mode: daemon (Deployment+PVC+Service) or task (Job template).
+                  Immutable after creation — switching mode changes the entire workload topology.
                 enum:
                 - daemon
                 - task
                 type: string
+                x-kubernetes-validations:
+                - message: mode is immutable
+                  rule: self == oldSelf
               model:
                 description: Primary model in provider/model format (e.g. anthropic/claude-sonnet-4-20250514).
                 minLength: 1
@@ -1136,6 +1146,9 @@ spec:
             - model
             - providerRefs
             type: object
+            x-kubernetes-validations:
+            - message: storage is not allowed for task-mode agents
+              rule: self.mode != 'task' || !has(self.storage)
           status:
             description: AgentStatus defines the observed state of Agent.
             properties:

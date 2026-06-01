@@ -91,11 +91,18 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	// Resolve referenced Integrations
 	integrations, err := r.resolveIntegrations(ctx, agent)
 	if err != nil {
+		meta.SetStatusCondition(&agent.Status.Conditions, metav1.Condition{
+			Type:    agentsv1alpha1.AgentConditionResourcesReady,
+			Status:  metav1.ConditionFalse,
+			Reason:  "IntegrationNotFound",
+			Message: err.Error(),
+		})
 		r.setAgentFailedStatus(agent, agentsv1alpha1.AgentPhaseFailed, err.Error())
 		if patchErr := patchStatus(ctx, r.Client, agent, statusPatch); patchErr != nil {
 			return ctrl.Result{}, patchErr
 		}
-		return ctrl.Result{}, nil
+		// Requeue so the agent recovers automatically once the integration appears.
+		return ctrl.Result{RequeueAfter: requeueInterval}, nil
 	}
 
 	// Validate Integrations are ready

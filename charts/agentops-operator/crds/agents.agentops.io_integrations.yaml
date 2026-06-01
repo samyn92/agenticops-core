@@ -221,8 +221,9 @@ spec:
                 - group
                 type: object
               kind:
-                description: Kind of integration (e.g. github-repo, gitlab-project,
-                  git-repo).
+                description: |-
+                  Kind of integration (e.g. github-repo, gitlab-project, git-repo).
+                  Immutable after creation.
                 enum:
                 - github-repo
                 - github-org
@@ -232,6 +233,9 @@ spec:
                 - s3-bucket
                 - documentation
                 type: string
+                x-kubernetes-validations:
+                - message: kind is immutable
+                  rule: self == oldSelf
               s3:
                 description: 'S3 bucket configuration (kind: s3-bucket).'
                 properties:
@@ -316,6 +320,21 @@ spec:
             - displayName
             - kind
             type: object
+            x-kubernetes-validations:
+            - message: github config is required for kind=github-repo
+              rule: self.kind != 'github-repo' || has(self.github)
+            - message: githubOrg config is required for kind=github-org
+              rule: self.kind != 'github-org' || has(self.githubOrg)
+            - message: gitlab config is required for kind=gitlab-project
+              rule: self.kind != 'gitlab-project' || has(self.gitlab)
+            - message: gitlabGroup config is required for kind=gitlab-group
+              rule: self.kind != 'gitlab-group' || has(self.gitlabGroup)
+            - message: git config is required for kind=git-repo
+              rule: self.kind != 'git-repo' || has(self.git)
+            - message: s3 config is required for kind=s3-bucket
+              rule: self.kind != 's3-bucket' || has(self.s3)
+            - message: documentation config is required for kind=documentation
+              rule: self.kind != 'documentation' || has(self.documentation)
           status:
             description: IntegrationStatus defines the observed state of Integration.
             properties:

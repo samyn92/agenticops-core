@@ -380,18 +380,19 @@ type DelegationSpec struct {
 }
 
 // -------------------------------------------------------------------
-// Memory (Engram)
+// Memory (agentops-memory)
 // -------------------------------------------------------------------
 
-// MemorySpec configures the Engram shared memory system for an agent.
+// MemorySpec configures the agentops-memory shared memory system for an agent.
 type MemorySpec struct {
 	// Reference to the memory server. A plain Kubernetes service name
-	// in the same namespace (e.g. "engram" resolves to http://engram.<ns>.svc:7437).
+	// in the same namespace (e.g. "agentops-memory" resolves to
+	// http://agentops-memory.<ns>.svc:7437).
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	ServerRef string `json:"serverRef"`
 
-	// Project name used to scope memories in Engram.
+	// Project name used to scope memories in agentops-memory.
 	// Defaults to the Agent CR name if unset.
 	// +optional
 	Project string `json:"project,omitempty"`

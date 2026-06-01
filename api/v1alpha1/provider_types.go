@@ -44,6 +44,7 @@ const (
 )
 
 // ProviderSpec defines the desired state of Provider.
+// +kubebuilder:validation:XValidation:rule="self.type != 'openaicompat' || (has(self.endpoint) && has(self.endpoint.baseURL) && self.endpoint.baseURL != '')",message="openaicompat providers require endpoint.baseURL"
 type ProviderSpec struct {
 
 	// ====================================================================
@@ -52,7 +53,9 @@ type ProviderSpec struct {
 
 	// Type selects the Fantasy SDK backend.
 	// Known values: anthropic, openai, google, azure, bedrock, openrouter, openaicompat.
+	// Immutable after creation.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="type is immutable"
 	Type ProviderType `json:"type"`
 
 	// ====================================================================
@@ -292,7 +295,13 @@ const (
 	ProviderConditionSecretReady = "SecretReady"
 	// ProviderConditionConfigValid indicates the config fields are consistent with spec.type.
 	ProviderConditionConfigValid = "ConfigValid"
+	// ProviderConditionInUse indicates one or more Agents still reference this Provider,
+	// blocking deletion until those references are removed.
+	ProviderConditionInUse = "InUse"
 )
+
+// ProviderFinalizer protects a Provider from deletion while Agents still reference it.
+const ProviderFinalizer = "agents.agentops.io/provider-protection"
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

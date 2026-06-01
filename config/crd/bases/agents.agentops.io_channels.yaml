@@ -735,8 +735,9 @@ spec:
                 - botTokenSecret
                 type: object
               type:
-                description: 'Channel type: telegram, slack, discord, gitlab, github,
-                  webhook.'
+                description: |-
+                  Channel type: telegram, slack, discord, gitlab, github, webhook.
+                  Immutable after creation.
                 enum:
                 - telegram
                 - slack
@@ -745,6 +746,9 @@ spec:
                 - github
                 - webhook
                 type: string
+                x-kubernetes-validations:
+                - message: type is immutable
+                  rule: self == oldSelf
               webhook:
                 description: Webhook ingress configuration (host, TLS, etc.).
                 properties:
@@ -794,6 +798,21 @@ spec:
             - image
             - type
             type: object
+            x-kubernetes-validations:
+            - message: telegram config is required for type=telegram
+              rule: self.type != 'telegram' || has(self.telegram)
+            - message: slack config is required for type=slack
+              rule: self.type != 'slack' || has(self.slack)
+            - message: discord config is required for type=discord
+              rule: self.type != 'discord' || has(self.discord)
+            - message: gitlab config is required for type=gitlab
+              rule: self.type != 'gitlab' || has(self.gitlab)
+            - message: github config is required for type=github
+              rule: self.type != 'github' || has(self.github)
+            - message: prompt template is required for event-type channels (gitlab,
+                github, webhook)
+              rule: '!(self.type in [''gitlab'',''github'',''webhook'']) || (has(self.prompt)
+                && self.prompt != '''')'
           status:
             description: ChannelStatus defines the observed state of Channel.
             properties:

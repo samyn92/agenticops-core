@@ -270,6 +270,7 @@ spec:
                 description: |-
                   Type selects the Fantasy SDK backend.
                   Known values: anthropic, openai, google, azure, bedrock, openrouter, openaicompat.
+                  Immutable after creation.
                 enum:
                 - anthropic
                 - openai
@@ -279,9 +280,16 @@ spec:
                 - openrouter
                 - openaicompat
                 type: string
+                x-kubernetes-validations:
+                - message: type is immutable
+                  rule: self == oldSelf
             required:
             - type
             type: object
+            x-kubernetes-validations:
+            - message: openaicompat providers require endpoint.baseURL
+              rule: self.type != 'openaicompat' || (has(self.endpoint) && has(self.endpoint.baseURL)
+                && self.endpoint.baseURL != '')
           status:
             description: ProviderStatus defines the observed state of Provider.
             properties:

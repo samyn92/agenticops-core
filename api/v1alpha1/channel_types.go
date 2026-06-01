@@ -49,6 +49,12 @@ func (t ChannelType) IsEventType() bool {
 }
 
 // ChannelSpec defines the desired state of Channel.
+// +kubebuilder:validation:XValidation:rule="self.type != 'telegram' || has(self.telegram)",message="telegram config is required for type=telegram"
+// +kubebuilder:validation:XValidation:rule="self.type != 'slack' || has(self.slack)",message="slack config is required for type=slack"
+// +kubebuilder:validation:XValidation:rule="self.type != 'discord' || has(self.discord)",message="discord config is required for type=discord"
+// +kubebuilder:validation:XValidation:rule="self.type != 'gitlab' || has(self.gitlab)",message="gitlab config is required for type=gitlab"
+// +kubebuilder:validation:XValidation:rule="self.type != 'github' || has(self.github)",message="github config is required for type=github"
+// +kubebuilder:validation:XValidation:rule="!(self.type in ['gitlab','github','webhook']) || (has(self.prompt) && self.prompt != '')",message="prompt template is required for event-type channels (gitlab, github, webhook)"
 type ChannelSpec struct {
 
 	// ====================================================================
@@ -56,7 +62,9 @@ type ChannelSpec struct {
 	// ====================================================================
 
 	// Channel type: telegram, slack, discord, gitlab, github, webhook.
+	// Immutable after creation.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="type is immutable"
 	Type ChannelType `json:"type"`
 
 	// Name of the Agent CR to target.

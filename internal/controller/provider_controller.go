@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -56,6 +57,20 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Handle deletion: block while Agents still reference this Provider.
+	if !provider.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, provider)
+	}
+
+	// Ensure the deletion-protection finalizer is present.
+	if controllerutil.AddFinalizer(provider, agentsv1alpha1.ProviderFinalizer) {
+		if err := r.Update(ctx, provider); err != nil {
+			return ctrl.Result{}, err
+		}
+		// Re-fetch happens on the next reconcile triggered by the update.
+		return ctrl.Result{}, nil
 	}
 
 	// Save a copy for status patch comparison
@@ -97,6 +112,46 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	return ctrl.Result{}, nil
+}
+
+// reconcileDelete blocks Provider deletion while Agents still reference it.
+// The finalizer is only removed once boundAgents reaches zero, preventing
+// silent breakage of running agents whose provider disappears.
+func (r *ProviderReconciler) reconcileDelete(ctx context.Context, provider *agentsv1alpha1.Provider) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	if !controllerutil.ContainsFinalizer(provider, agentsv1alpha1.ProviderFinalizer) {
+		return ctrl.Result{}, nil
+	}
+
+	boundAgents, err := r.countBoundAgents(ctx, provider)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if boundAgents > 0 {
+		log.Info("Provider deletion blocked: still referenced by agents",
+			"name", provider.Name, "boundAgents", boundAgents)
+		statusPatch := client.MergeFrom(provider.DeepCopy())
+		provider.Status.BoundAgents = boundAgents
+		meta.SetStatusCondition(&provider.Status.Conditions, metav1.Condition{
+			Type:    agentsv1alpha1.ProviderConditionInUse,
+			Status:  metav1.ConditionTrue,
+			Reason:  "ReferencedByAgents",
+			Message: fmt.Sprintf("deletion blocked: %d agent(s) still reference this provider", boundAgents),
+		})
+		if err := patchStatus(ctx, r.Client, provider, statusPatch); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: requeueInterval}, nil
+	}
+
+	log.Info("Provider deletion allowed: no bound agents, removing finalizer", "name", provider.Name)
+	controllerutil.RemoveFinalizer(provider, agentsv1alpha1.ProviderFinalizer)
+	if err := r.Update(ctx, provider); err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -189,7 +244,7 @@ func (r *ProviderReconciler) validateSecret(ctx context.Context, provider *agent
 			Type:    agentsv1alpha1.ProviderConditionSecretReady,
 			Status:  metav1.ConditionTrue,
 			Reason:  "NotApplicable",
-			Message: "No apiKeySecret configured; authentication handled by token-injector",
+			Message: "No apiKeySecret configured; authentication handled via OAuth2 client credentials",
 		})
 		return true
 	}

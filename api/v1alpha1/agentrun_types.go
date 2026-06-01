@@ -43,6 +43,9 @@ const (
 )
 
 // AgentRunSpec defines the desired state of AgentRun.
+// The spec is immutable after creation — an AgentRun records a single
+// execution request; re-running requires creating a new AgentRun.
+// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="agentRun spec is immutable; create a new AgentRun to re-run"
 type AgentRunSpec struct {
 	// Name of the Agent CR to run.
 	// +kubebuilder:validation:Required
