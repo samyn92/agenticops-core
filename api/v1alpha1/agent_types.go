@@ -365,7 +365,7 @@ func (a *Agent) BuiltinToolCount() int {
 // a known-good agentops-runtime tag and document the runtime compatibility in the
 // release notes. Do NOT use a floating tag (":latest") — combined with the default
 // IfNotPresent pull policy it causes silent, per-node version skew.
-const DefaultFantasyImage = "ghcr.io/samyn92/agentops-runtime-fantasy:0.17.1"
+const DefaultFantasyImage = "ghcr.io/samyn92/agentops-runtime-fantasy:0.18.0"
 
 // +kubebuilder:object:root=true
 
