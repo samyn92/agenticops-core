@@ -32,8 +32,9 @@ func BuildAgentRunJob(run *agentsv1alpha1.AgentRun, agent *agentsv1alpha1.Agent,
 	labels := CommonLabels(agent.Name, "task-run")
 	labels["agents.agentops.io/run"] = run.Name
 
-	// Build the pod spec in task mode
-	podSpec := buildAgentPodSpec(agent, providers, true, infra)
+	// Build the pod spec in task mode (GitLab identity comes from
+	// AgentRun.spec.git via gitCfg below, not from bound integrations).
+	podSpec := buildAgentPodSpec(agent, providers, nil, true, infra)
 
 	// Inject AGENT_PROMPT and AGENT_RUN_NAME into the main container
 	for i := range podSpec.Containers {

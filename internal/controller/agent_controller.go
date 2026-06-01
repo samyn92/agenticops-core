@@ -220,7 +220,7 @@ func (r *AgentReconciler) reconcileDaemon(ctx context.Context, agent *agentsv1al
 	}
 
 	// 3. Deployment
-	deployment := resources.BuildAgentDeployment(agent, providers, r.Infra)
+	deployment := resources.BuildAgentDeployment(agent, providers, integrations, r.Infra)
 	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, agent, deployment); err != nil {
 		return ctrl.Result{}, err
 	}

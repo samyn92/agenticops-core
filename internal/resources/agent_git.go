@@ -18,6 +18,7 @@ package resources
 
 import (
 	"fmt"
+	"strings"
 
 	agentsv1alpha1 "github.com/samyn92/agentops-core/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -171,6 +172,93 @@ func (g *GitWorkspaceConfig) GitEnvVars() []corev1.EnvVar {
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: g.Credentials.Name},
 						Key:                  g.Credentials.Key,
+					},
+				},
+			})
+		}
+	}
+
+	return env
+}
+
+// GitLabEnvFromIntegrations exposes a single bound GitLab identity to the
+// runtime's native gitlab_* tools via the env contract they expect
+// (GITLAB_URL / GITLAB_TOKEN / GITLAB_GROUP / GITLAB_PROJECT /
+// GITLAB_PROJECTS / GITLAB_READONLY).
+//
+// One agent carries one GitLab identity (the native tools read a single
+// token). A bound gitlab-group is preferred over a gitlab-project; among
+// equals the first in declaration order wins. Returns nil when no GitLab
+// integration is bound. Credentials are injected as a SecretKeyRef (never
+// rendered into config). Used only for daemon agents — task-mode runs get
+// their git identity from AgentRun.spec.git via GitEnvVars.
+func GitLabEnvFromIntegrations(
+	integrations []agentsv1alpha1.Integration,
+	bindings map[string]agentsv1alpha1.IntegrationBinding,
+) []corev1.EnvVar {
+	var chosen *agentsv1alpha1.Integration
+	for i := range integrations {
+		switch integrations[i].Spec.Kind {
+		case agentsv1alpha1.IntegrationKindGitLabGroup:
+			// Group wins outright.
+			chosen = &integrations[i]
+		case agentsv1alpha1.IntegrationKindGitLabProject:
+			if chosen == nil {
+				chosen = &integrations[i]
+			}
+		}
+		if chosen != nil && chosen.Spec.Kind == agentsv1alpha1.IntegrationKindGitLabGroup {
+			break
+		}
+	}
+	if chosen == nil {
+		return nil
+	}
+
+	binding := bindings[chosen.Name]
+	readOnly := binding.ReadOnly
+
+	var env []corev1.EnvVar
+	switch chosen.Spec.Kind {
+	case agentsv1alpha1.IntegrationKindGitLabProject:
+		gl := chosen.Spec.GitLab
+		if gl == nil {
+			return nil
+		}
+		env = append(env,
+			corev1.EnvVar{Name: "GITLAB_URL", Value: gl.BaseURL},
+			corev1.EnvVar{Name: "GITLAB_PROJECT", Value: gl.Project},
+		)
+	case agentsv1alpha1.IntegrationKindGitLabGroup:
+		gl := chosen.Spec.GitLabGroup
+		if gl == nil {
+			return nil
+		}
+		env = append(env,
+			corev1.EnvVar{Name: "GITLAB_URL", Value: gl.BaseURL},
+			corev1.EnvVar{Name: "GITLAB_GROUP", Value: gl.Group},
+		)
+		if len(gl.Projects) > 0 {
+			env = append(env, corev1.EnvVar{Name: "GITLAB_PROJECTS", Value: strings.Join(gl.Projects, ",")})
+		}
+		if gl.ReadOnly {
+			readOnly = true
+		}
+	}
+
+	if readOnly {
+		env = append(env, corev1.EnvVar{Name: "GITLAB_READONLY", Value: "true"})
+	}
+
+	// Token (and GIT_TOKEN for the git credential helper) from the Secret.
+	if chosen.Spec.Credentials != nil {
+		for _, name := range []string{"GITLAB_TOKEN", "GIT_TOKEN"} {
+			env = append(env, corev1.EnvVar{
+				Name: name,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: chosen.Spec.Credentials.Name},
+						Key:                  chosen.Spec.Credentials.Key,
 					},
 				},
 			})

@@ -216,6 +216,13 @@ spec:
                     items:
                       type: string
                     type: array
+                  readOnly:
+                    description: |-
+                      ReadOnly forces this group identity read-only for bound agents
+                      regardless of the access token's own scope. The operator sets
+                      GITLAB_READONLY=true, disabling the runtime's write tools
+                      (create/update MR, add notes). Recommended for broad group tokens.
+                    type: boolean
                 required:
                 - baseURL
                 - group

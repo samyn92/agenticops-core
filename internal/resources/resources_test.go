@@ -90,7 +90,7 @@ func TestBuildAgentConfigMap(t *testing.T) {
 
 func TestBuildAgentDeployment(t *testing.T) {
 	agent := testAgent()
-	deploy := BuildAgentDeployment(agent, nil, InfraConfig{})
+	deploy := BuildAgentDeployment(agent, nil, nil, InfraConfig{})
 
 	containers := deploy.Spec.Template.Spec.Containers
 	if len(containers) < 1 {
@@ -114,7 +114,7 @@ func TestBuildAgentDeployment(t *testing.T) {
 
 func TestBuildAgentDeployment_EnvVars(t *testing.T) {
 	agent := testAgent()
-	deploy := BuildAgentDeployment(agent, nil, InfraConfig{})
+	deploy := BuildAgentDeployment(agent, nil, nil, InfraConfig{})
 
 	main := deploy.Spec.Template.Spec.Containers[0]
 	envMap := make(map[string]string)
@@ -138,7 +138,7 @@ func TestBuildAgentDeployment_EnvVars(t *testing.T) {
 func TestBuildAgentDeployment_CustomImage(t *testing.T) {
 	agent := testAgent()
 	agent.Spec.Image = "custom-registry.io/my-agent:v2"
-	deploy := BuildAgentDeployment(agent, nil, InfraConfig{})
+	deploy := BuildAgentDeployment(agent, nil, nil, InfraConfig{})
 
 	if deploy.Spec.Template.Spec.Containers[0].Image != "custom-registry.io/my-agent:v2" {
 		t.Errorf("expected custom image, got %q", deploy.Spec.Template.Spec.Containers[0].Image)
@@ -147,7 +147,7 @@ func TestBuildAgentDeployment_CustomImage(t *testing.T) {
 
 func TestBuildAgentDeployment_HealthCheck(t *testing.T) {
 	agent := testAgent()
-	deploy := BuildAgentDeployment(agent, nil, InfraConfig{})
+	deploy := BuildAgentDeployment(agent, nil, nil, InfraConfig{})
 
 	main := deploy.Spec.Template.Spec.Containers[0]
 	if main.LivenessProbe == nil {

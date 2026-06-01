@@ -246,6 +246,13 @@ type GitLabGroupResourceConfig struct {
 	// Optional filter to include only specific projects within the group.
 	// +optional
 	Projects []string `json:"projects,omitempty"`
+
+	// ReadOnly forces this group identity read-only for bound agents
+	// regardless of the access token's own scope. The operator sets
+	// GITLAB_READONLY=true, disabling the runtime's write tools
+	// (create/update MR, add notes). Recommended for broad group tokens.
+	// +optional
+	ReadOnly bool `json:"readOnly,omitempty"`
 }
 
 // GitResourceConfig configures a plain git repository resource.
