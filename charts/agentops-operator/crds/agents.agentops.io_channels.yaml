@@ -812,7 +812,7 @@ spec:
             - message: prompt template is required for event-type channels (gitlab,
                 github, webhook)
               rule: '!(self.type in [''gitlab'',''github'',''webhook'']) || (has(self.prompt)
-                && self.prompt != '''')'
+                && size(self.prompt) != 0)'
           status:
             description: ChannelStatus defines the observed state of Channel.
             properties:

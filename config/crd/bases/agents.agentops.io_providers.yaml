@@ -289,7 +289,7 @@ spec:
             x-kubernetes-validations:
             - message: openaicompat providers require endpoint.baseURL
               rule: self.type != 'openaicompat' || (has(self.endpoint) && has(self.endpoint.baseURL)
-                && self.endpoint.baseURL != '')
+                && size(self.endpoint.baseURL) != 0)
           status:
             description: ProviderStatus defines the observed state of Provider.
             properties:

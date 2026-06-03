@@ -44,7 +44,7 @@ const (
 )
 
 // ProviderSpec defines the desired state of Provider.
-// +kubebuilder:validation:XValidation:rule="self.type != 'openaicompat' || (has(self.endpoint) && has(self.endpoint.baseURL) && self.endpoint.baseURL != '')",message="openaicompat providers require endpoint.baseURL"
+// +kubebuilder:validation:XValidation:rule="self.type != 'openaicompat' || (has(self.endpoint) && has(self.endpoint.baseURL) && size(self.endpoint.baseURL) != 0)",message="openaicompat providers require endpoint.baseURL"
 type ProviderSpec struct {
 
 	// ====================================================================

@@ -54,7 +54,7 @@ func (t ChannelType) IsEventType() bool {
 // +kubebuilder:validation:XValidation:rule="self.type != 'discord' || has(self.discord)",message="discord config is required for type=discord"
 // +kubebuilder:validation:XValidation:rule="self.type != 'gitlab' || has(self.gitlab)",message="gitlab config is required for type=gitlab"
 // +kubebuilder:validation:XValidation:rule="self.type != 'github' || has(self.github)",message="github config is required for type=github"
-// +kubebuilder:validation:XValidation:rule="!(self.type in ['gitlab','github','webhook']) || (has(self.prompt) && self.prompt != '')",message="prompt template is required for event-type channels (gitlab, github, webhook)"
+// +kubebuilder:validation:XValidation:rule="!(self.type in ['gitlab','github','webhook']) || (has(self.prompt) && size(self.prompt) != 0)",message="prompt template is required for event-type channels (gitlab, github, webhook)"
 type ChannelSpec struct {
 
 	// ====================================================================
