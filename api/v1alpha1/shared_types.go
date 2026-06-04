@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // -------------------------------------------------------------------
@@ -282,6 +283,43 @@ type GitLabChannelConfig struct {
 	Labels []string `json:"labels,omitempty"`
 	// Webhook secret for signature verification.
 	Secret SecretKeyRef `json:"secret"`
+}
+
+// GitLabLabelChannelConfig configures a poll-based GitLab work-board trigger.
+// The operator resolves the bound Integration to obtain the base URL, project (or
+// group), and API token, then injects them into the bridge which polls GitLab for
+// issues/MRs matching Labels and fires the agent per new match. Idempotency is a
+// property of the label state machine: the agent's first action removes a matched
+// label, so the item stops matching.
+type GitLabLabelChannelConfig struct {
+	// IntegrationRef is the name of a bound gitlab-project / gitlab-group
+	// Integration (same namespace) supplying base URL, project, and token.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	IntegrationRef string `json:"integrationRef"`
+
+	// Target selects what to poll: issues or merge_requests.
+	// +optional
+	// +kubebuilder:validation:Enum=issues;merge_requests
+	// +kubebuilder:default=issues
+	Target string `json:"target,omitempty"`
+
+	// Labels to match (e.g. "agent::todo", "agent::changes-requested").
+	// An item is a candidate when it carries ALL listed labels.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Labels []string `json:"labels"`
+
+	// State filter: opened (default) or all.
+	// +optional
+	// +kubebuilder:validation:Enum=opened;all
+	// +kubebuilder:default=opened
+	State string `json:"state,omitempty"`
+
+	// PollInterval between GitLab API polls.
+	// +optional
+	// +kubebuilder:default="30s"
+	PollInterval *metav1.Duration `json:"pollInterval,omitempty"`
 }
 
 // GitHubChannelConfig configures a GitHub webhook channel.

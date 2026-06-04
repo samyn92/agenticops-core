@@ -158,6 +158,48 @@ spec:
                 - events
                 - secret
                 type: object
+              gitlabLabel:
+                description: |-
+                  GitLabLabel poll-based work-board trigger configuration.
+                  The operator renders a bridge that polls a bound GitLab Integration for
+                  issues/MRs matching the given labels and fires the agent per new match.
+                properties:
+                  integrationRef:
+                    description: |-
+                      IntegrationRef is the name of a bound gitlab-project / gitlab-group
+                      Integration (same namespace) supplying base URL, project, and token.
+                    minLength: 1
+                    type: string
+                  labels:
+                    description: |-
+                      Labels to match (e.g. "agent::todo", "agent::changes-requested").
+                      An item is a candidate when it carries ALL listed labels.
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  pollInterval:
+                    default: 30s
+                    description: PollInterval between GitLab API polls.
+                    type: string
+                  state:
+                    default: opened
+                    description: 'State filter: opened (default) or all.'
+                    enum:
+                    - opened
+                    - all
+                    type: string
+                  target:
+                    default: issues
+                    description: 'Target selects what to poll: issues or merge_requests.'
+                    enum:
+                    - issues
+                    - merge_requests
+                    type: string
+                required:
+                - integrationRef
+                - labels
+                type: object
               image:
                 description: Container image for the channel bridge.
                 minLength: 1
@@ -745,6 +787,7 @@ spec:
                 - gitlab
                 - github
                 - webhook
+                - gitlab-label
                 type: string
                 x-kubernetes-validations:
                 - message: type is immutable
@@ -809,10 +852,12 @@ spec:
               rule: self.type != 'gitlab' || has(self.gitlab)
             - message: github config is required for type=github
               rule: self.type != 'github' || has(self.github)
+            - message: gitlabLabel config is required for type=gitlab-label
+              rule: self.type != 'gitlab-label' || has(self.gitlabLabel)
             - message: prompt template is required for event-type channels (gitlab,
-                github, webhook)
-              rule: '!(self.type in [''gitlab'',''github'',''webhook'']) || (has(self.prompt)
-                && size(self.prompt) != 0)'
+                github, webhook, gitlab-label)
+              rule: '!(self.type in [''gitlab'',''github'',''webhook'',''gitlab-label''])
+                || (has(self.prompt) && size(self.prompt) != 0)'
           status:
             description: ChannelStatus defines the observed state of Channel.
             properties:

@@ -117,7 +117,7 @@ func TestRestrictedPSS_ChannelDeployment(t *testing.T) {
 			},
 		},
 	}
-	d := BuildChannelDeployment(ch, agent)
+	d := BuildChannelDeployment(ch, agent, nil)
 	assertRestrictedCompliant(t, "Channel bridge Deployment",
 		&d.Spec.Template.ObjectMeta, &d.Spec.Template.Spec)
 }

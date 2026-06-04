@@ -22,16 +22,17 @@ import (
 )
 
 // ChannelType defines the type of channel.
-// +kubebuilder:validation:Enum=telegram;slack;discord;gitlab;github;webhook
+// +kubebuilder:validation:Enum=telegram;slack;discord;gitlab;github;webhook;gitlab-label
 type ChannelType string
 
 const (
-	ChannelTypeTelegram ChannelType = "telegram"
-	ChannelTypeSlack    ChannelType = "slack"
-	ChannelTypeDiscord  ChannelType = "discord"
-	ChannelTypeGitLab   ChannelType = "gitlab"
-	ChannelTypeGitHub   ChannelType = "github"
-	ChannelTypeWebhook  ChannelType = "webhook"
+	ChannelTypeTelegram    ChannelType = "telegram"
+	ChannelTypeSlack       ChannelType = "slack"
+	ChannelTypeDiscord     ChannelType = "discord"
+	ChannelTypeGitLab      ChannelType = "gitlab"
+	ChannelTypeGitHub      ChannelType = "github"
+	ChannelTypeWebhook     ChannelType = "webhook"
+	ChannelTypeGitLabLabel ChannelType = "gitlab-label"
 )
 
 // ChannelPhase describes the current phase of a Channel.
@@ -43,9 +44,15 @@ const (
 	ChannelPhaseFailed  ChannelPhase = "Failed"
 )
 
-// IsEventType returns true if this channel type is event-driven (webhook/forge).
+// IsEventType returns true if this channel type is event-driven (webhook/forge/poll).
 func (t ChannelType) IsEventType() bool {
-	return t == ChannelTypeGitLab || t == ChannelTypeGitHub || t == ChannelTypeWebhook
+	return t == ChannelTypeGitLab || t == ChannelTypeGitHub || t == ChannelTypeWebhook || t == ChannelTypeGitLabLabel
+}
+
+// IsPollType returns true if this channel type is poll-based (operator renders a
+// bridge that polls an external API; no inbound webhook ingress is created).
+func (t ChannelType) IsPollType() bool {
+	return t == ChannelTypeGitLabLabel
 }
 
 // ChannelSpec defines the desired state of Channel.
@@ -54,6 +61,7 @@ func (t ChannelType) IsEventType() bool {
 // +kubebuilder:validation:XValidation:rule="self.type != 'discord' || has(self.discord)",message="discord config is required for type=discord"
 // +kubebuilder:validation:XValidation:rule="self.type != 'gitlab' || has(self.gitlab)",message="gitlab config is required for type=gitlab"
 // +kubebuilder:validation:XValidation:rule="self.type != 'github' || has(self.github)",message="github config is required for type=github"
+// +kubebuilder:validation:XValidation:rule="self.type != 'gitlab-label' || has(self.gitlabLabel)",message="gitlabLabel config is required for type=gitlab-label"
 // +kubebuilder:validation:XValidation:rule="!(self.type in ['gitlab','github','webhook']) || (has(self.prompt) && size(self.prompt) != 0)",message="prompt template is required for event-type channels (gitlab, github, webhook)"
 type ChannelSpec struct {
 
@@ -91,6 +99,12 @@ type ChannelSpec struct {
 	// GitLab webhook configuration.
 	// +optional
 	GitLab *GitLabChannelConfig `json:"gitlab,omitempty"`
+
+	// GitLabLabel poll-based work-board trigger configuration.
+	// The operator renders a bridge that polls a bound GitLab Integration for
+	// issues/MRs matching the given labels and fires the agent per new match.
+	// +optional
+	GitLabLabel *GitLabLabelChannelConfig `json:"gitlabLabel,omitempty"`
 
 	// GitHub webhook configuration.
 	// +optional

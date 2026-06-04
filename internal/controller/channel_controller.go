@@ -86,6 +86,32 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	setSecurityPolicyViolationsCondition(&channel.Status.Conditions,
 		resources.ComputeSecurityViolations(channel.Spec.Security))
 
+	// Resolve the bound Integration for poll-based channels (gitlab-label).
+	// The operator passes the Integration's identity + credentials SecretKeyRef
+	// to the bridge; it never reads the secret value itself.
+	var integration *agentsv1alpha1.Integration
+	if channel.Spec.Type == agentsv1alpha1.ChannelTypeGitLabLabel {
+		ref := ""
+		if channel.Spec.GitLabLabel != nil {
+			ref = channel.Spec.GitLabLabel.IntegrationRef
+		}
+		if ref == "" {
+			r.setChannelFailedStatus(channel, "gitlabLabel.integrationRef is required for gitlab-label channels")
+			if patchErr := patchStatus(ctx, r.Client, channel, statusPatch); patchErr != nil {
+				return ctrl.Result{}, patchErr
+			}
+			return ctrl.Result{}, nil
+		}
+		integration = &agentsv1alpha1.Integration{}
+		if err := r.Get(ctx, types.NamespacedName{Name: ref, Namespace: channel.Namespace}, integration); err != nil {
+			r.setChannelFailedStatus(channel, fmt.Sprintf("Integration %q not found: %v", ref, err))
+			if patchErr := patchStatus(ctx, r.Client, channel, statusPatch); patchErr != nil {
+				return ctrl.Result{}, patchErr
+			}
+			return ctrl.Result{}, nil
+		}
+	}
+
 	// 0. RBAC (ServiceAccount + Role + RoleBinding for AgentRun creation)
 	sa := resources.BuildChannelServiceAccount(channel)
 	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, sa); err != nil {
@@ -101,7 +127,7 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// 1. Deployment
-	deployment := resources.BuildChannelDeployment(channel, agent)
+	deployment := resources.BuildChannelDeployment(channel, agent, integration)
 	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, deployment); err != nil {
 		return ctrl.Result{}, err
 	}

@@ -100,7 +100,9 @@ func BuildChannelServiceAccount(ch *agentsv1alpha1.Channel) *corev1.ServiceAccou
 }
 
 // BuildChannelRole creates a namespaced Role granting the channel bridge
-// permission to create AgentRun CRs (needed for task-mode agent routing).
+// permission to create AgentRun CRs (needed for task-mode agent routing) and
+// to get/list them (needed by the gitlab-label failure-recovery backstop, which
+// inspects the latest AgentRun's phase to re-queue cards whose run died).
 func BuildChannelRole(ch *agentsv1alpha1.Channel) *rbacv1.Role {
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -112,7 +114,7 @@ func BuildChannelRole(ch *agentsv1alpha1.Channel) *rbacv1.Role {
 			{
 				APIGroups: []string{"agents.agentops.io"},
 				Resources: []string{"agentruns"},
-				Verbs:     []string{"create"},
+				Verbs:     []string{"create", "get", "list"},
 			},
 		},
 	}

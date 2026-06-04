@@ -89,10 +89,20 @@ func (r *Channel) validate() (admission.Warnings, error) {
 			allErrs = append(allErrs, field.Required(specPath.Child("github"),
 				"github config is required for type=github"))
 		}
+	case ChannelTypeGitLabLabel:
+		if r.Spec.GitLabLabel == nil {
+			allErrs = append(allErrs, field.Required(specPath.Child("gitlabLabel"),
+				"gitlabLabel config is required for type=gitlab-label"))
+		} else if r.Spec.GitLabLabel.IntegrationRef == "" {
+			allErrs = append(allErrs, field.Required(specPath.Child("gitlabLabel", "integrationRef"),
+				"integrationRef is required for type=gitlab-label"))
+		}
 	}
 
-	// Event types require prompt template
-	if r.Spec.Type.IsEventType() && r.Spec.Prompt == "" {
+	// Event types require a prompt template, except gitlab-label: that is a
+	// structured work-board channel whose protocol prompt is supplied by the
+	// operator as a platform-owned default when spec.prompt is omitted.
+	if r.Spec.Type.IsEventType() && r.Spec.Type != ChannelTypeGitLabLabel && r.Spec.Prompt == "" {
 		allErrs = append(allErrs, field.Required(specPath.Child("prompt"),
 			fmt.Sprintf("prompt template is required for event-type channel (%s)", r.Spec.Type)))
 	}
