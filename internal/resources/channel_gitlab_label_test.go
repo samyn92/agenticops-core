@@ -71,7 +71,7 @@ func gitlabProjectIntegration() *agentsv1alpha1.Integration {
 
 func gitlabEnvMap(t *testing.T, ch *agentsv1alpha1.Channel, intg *agentsv1alpha1.Integration) (map[string]string, map[string]string) {
 	t.Helper()
-	d := BuildChannelDeployment(ch, testAgent(), intg)
+	d := BuildChannelDeployment(ch, testAgent(), intg, InfraConfig{})
 	values := map[string]string{}
 	secretRefs := map[string]string{}
 	for _, c := range d.Spec.Template.Spec.Containers {

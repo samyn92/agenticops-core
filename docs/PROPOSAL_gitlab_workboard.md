@@ -177,6 +177,34 @@ The Board issues these **human-initiated** calls through the console BFF
 
 These are gated to human users; agents never receive a merge tool.
 
+### 5a. Group workspace (gitlab-group integration)
+
+Beyond the per-agent, per-project board, the console exposes a **group-aggregated
+GitLab Workspace** backed by a single `gitlab-group` Integration (one group
+access token / PAT with `api` scope and group membership). It aggregates every
+project in the group into one filterable cockpit:
+
+- **BFF group reads** (non-agent-scoped, `/integrations/{ns}/{name}/group/*`):
+  `projects`, `issues`, `merge_requests`, `labels`, `members` → GitLab
+  `/groups/{group}/...`. Requires a *real* GitLab group — the `/groups` API does
+  not work on a user (personal) namespace.
+- **Per-card actions** reuse the work-board handlers via `?project=<id>` pinning
+  the action to the card's owning project.
+- **Server-side run↔card join** (`GET .../group/runs`, "Phase 5"): returns one
+  deduplicated entry per `(project, iid)` work item — the most-recent AgentRun's
+  phase, outcome and **Tempo `traceID`** — so the workspace cross-links a card
+  straight to its trace waterfall without shipping every AgentRun to the browser.
+
+### 5b. Known gaps — deferred
+
+- **Write-route authentication is deferred.** The group write actions (issue
+  label moves, MR notes, the merge gate) are currently reachable on the BFF
+  without an enforced human-identity check — the "human-only" guarantee is, for
+  now, a UI/social contract rather than a server-enforced one. Before any
+  multi-user / shared deployment, these routes MUST be gated behind authenticated
+  human identity (and merge must remain impossible for agent identities). Single
+  trusted-operator local-k3s use is acceptable in the interim.
+
 ---
 
 ## 6. Non-goals (explicit)

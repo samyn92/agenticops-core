@@ -31,7 +31,7 @@ import (
 // BuildChannelDeployment creates a Deployment for a Channel bridge.
 // integration is the resolved Integration referenced by a poll-based channel
 // (gitlab-label); it is nil for webhook/chat channel types.
-func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Agent, integration *agentsv1alpha1.Integration) *appsv1.Deployment {
+func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Agent, integration *agentsv1alpha1.Integration, infra InfraConfig) *appsv1.Deployment {
 	labels := map[string]string{
 		LabelComponent: "channel",
 		LabelManagedBy: ManagedByValue,
@@ -76,6 +76,10 @@ func BuildChannelDeployment(ch *agentsv1alpha1.Channel, agent *agentsv1alpha1.Ag
 			},
 		},
 	})
+
+	// NATS endpoint so poll-based bridges (gitlab-label) can publish real-time
+	// board_changed events the console consumes over SSE (no UI polling).
+	env = append(env, corev1.EnvVar{Name: "NATS_URL", Value: infra.NATS()})
 
 	// Platform-specific env vars
 	env = append(env, buildChannelPlatformEnv(ch, integration)...)
@@ -250,6 +254,9 @@ func buildChannelPlatformEnv(ch *agentsv1alpha1.Channel, integration *agentsv1al
 
 	case agentsv1alpha1.ChannelTypeGitLabLabel:
 		env = append(env, buildGitLabLabelEnv(ch, integration)...)
+
+	case agentsv1alpha1.ChannelTypeGitLabComment:
+		env = append(env, buildGitLabCommentEnv(ch, integration)...)
 	}
 
 	return env
@@ -380,6 +387,109 @@ Steps:
 {{end}}
 {{end}}
 Do NOT merge the merge request — a human reviews and merges. If you genuinely cannot complete the task, your required final action is the same {{if eq .gitlab.target "merge_requests"}}gitlab_update_mr{{else}}gitlab_update_issue{{end}} call but adding ` + "`agent::changes-requested`" + ` instead of ` + "`agent::needs-review`" + ` (and removing ` + "`agent::in-progress`" + `), after explaining why with a note. Either way, your last tool call always moves card #{{.gitlab.iid}} off agent::in-progress.`
+
+// buildGitLabCommentEnv emits the poll-config + GitLab identity env for a
+// gitlab-comment channel. This drives the conversational planning loop: the
+// bridge polls issues carrying the planning label and, when a human leaves a
+// new comment, prompts the daemon planner to refine the issue body (the PLAN)
+// and reply in the thread. Daemon-only — no task-mode git identity is injected
+// because the planner mutates GitLab via its own native gitlab_* tools.
+func buildGitLabCommentEnv(ch *agentsv1alpha1.Channel, integration *agentsv1alpha1.Integration) []corev1.EnvVar {
+	cfg := ch.Spec.GitLabComment
+	if cfg == nil || integration == nil {
+		return nil
+	}
+
+	var env []corev1.EnvVar
+
+	// GitLab identity from the bound Integration (project or group).
+	switch {
+	case integration.Spec.GitLab != nil:
+		env = append(env,
+			corev1.EnvVar{Name: "GITLAB_BASE_URL", Value: integration.Spec.GitLab.BaseURL},
+			corev1.EnvVar{Name: "GITLAB_PROJECT", Value: integration.Spec.GitLab.Project},
+		)
+	case integration.Spec.GitLabGroup != nil:
+		env = append(env,
+			corev1.EnvVar{Name: "GITLAB_BASE_URL", Value: integration.Spec.GitLabGroup.BaseURL},
+			corev1.EnvVar{Name: "GITLAB_GROUP", Value: integration.Spec.GitLabGroup.Group},
+		)
+	}
+
+	// API token via SecretKeyRef (never read by the operator).
+	if integration.Spec.Credentials != nil {
+		env = append(env, corev1.EnvVar{
+			Name: "GITLAB_TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: integration.Spec.Credentials.Name},
+					Key:                  integration.Spec.Credentials.Key,
+				},
+			},
+		})
+	}
+
+	// Poll configuration.
+	state := cfg.State
+	if state == "" {
+		state = "opened"
+	}
+	planningLabel := cfg.PlanningLabel
+	if planningLabel == "" {
+		planningLabel = "agent::planning"
+	}
+	interval := "30s"
+	if cfg.PollInterval != nil && cfg.PollInterval.Duration > 0 {
+		interval = cfg.PollInterval.Duration.String()
+	}
+	env = append(env,
+		corev1.EnvVar{Name: "GITLAB_STATE", Value: state},
+		corev1.EnvVar{Name: "GITLAB_PLANNING_LABEL", Value: planningLabel},
+		corev1.EnvVar{Name: "GITLAB_POLL_INTERVAL", Value: interval},
+	)
+
+	// Planning protocol, agent half: when the channel does not override the
+	// prompt, inject the default planner prompt that drives PLAN refinement and
+	// the conversational reply in the issue thread.
+	if ch.Spec.Prompt == "" {
+		env = append(env, corev1.EnvVar{Name: "PROMPT_TEMPLATE", Value: defaultGitLabCommentPrompt})
+	}
+
+	return env
+}
+
+// defaultGitLabCommentPrompt is the planning prompt rendered by the
+// gitlab-comment bridge when a Channel does not set spec.prompt. It is a Go
+// text/template fed the poller's data: .gitlab.iid/.project/.title/.description
+// (the current PLAN)/.web_url/.label/.state and .new_comments (the unanswered
+// human messages that triggered this turn).
+const defaultGitLabCommentPrompt = `You are an interactive planning agent collaborating with a human on GitLab issue #{{.gitlab.iid}} in project {{.gitlab.project}}.
+
+THE CONTRACT: the issue DESCRIPTION is the living PLAN. The issue COMMENT thread is your conversation with the human. You refine the PLAN and answer in the thread until the human approves, then you hand the PLAN off for implementation.
+
+Issue under discussion:
+- #{{.gitlab.iid}}: {{.gitlab.title}}
+- URL: {{.gitlab.web_url}}
+- Planning label: {{.gitlab.label}}
+
+CURRENT PLAN (the issue description):
+"""
+{{.gitlab.description}}
+"""
+
+NEW UNANSWERED COMMENT(S) from the human you must respond to now:
+"""
+{{.new_comments}}
+"""
+
+Do this, in order:
+1. Read the full thread for context with gitlab_list_issue_notes on iid {{.gitlab.iid}} (the new comments above may reference earlier messages).
+2. Decide what the new comment(s) require: a change to the PLAN, a clarifying question back to the human, or both.
+3. If the PLAN needs to change, rewrite the FULL updated plan and save it with gitlab_update_issue_content on iid {{.gitlab.iid}}. Keep the description a complete, self-contained PLAN (goal, scope, approach, acceptance criteria) — not a changelog.
+4. ALWAYS reply in the thread with gitlab_add_issue_note on iid {{.gitlab.iid}}: briefly summarise what you changed in the PLAN and/or ask any clarifying questions you still need answered. This reply is REQUIRED every turn — it is how the human knows you responded and is what stops this comment from re-triggering you.
+5. HANDOFF: only if the human's new comment clearly APPROVES the plan (e.g. "approved", "lgtm", "ship it", "go ahead", "looks good, build it") AND you have no open questions, move the card to implementation: gitlab_update_issue on iid {{.gitlab.iid}} adding ` + "`agent::todo`" + ` and removing ` + "`{{.gitlab.label}}`" + `, then post a final gitlab_add_issue_note confirming the plan is locked and handed off. If approval is ambiguous, do NOT hand off — ask the human to confirm instead.
+
+Never open a merge request, never write code, and never merge anything — your only job is to shape the PLAN and converse. The implementation agent takes over once the card reaches ` + "`agent::todo`" + `.`
 
 // BuildChannelIngress creates an Ingress for a Channel's webhook endpoint.
 func BuildChannelIngress(ch *agentsv1alpha1.Channel) *networkingv1.Ingress {

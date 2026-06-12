@@ -43,6 +43,7 @@ import (
 type ChannelReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Infra  resources.InfraConfig
 }
 
 // +kubebuilder:rbac:groups=agents.agentops.io,resources=channels,verbs=get;list;watch;create;update;patch;delete
@@ -90,13 +91,17 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// The operator passes the Integration's identity + credentials SecretKeyRef
 	// to the bridge; it never reads the secret value itself.
 	var integration *agentsv1alpha1.Integration
-	if channel.Spec.Type == agentsv1alpha1.ChannelTypeGitLabLabel {
+	if channel.Spec.Type == agentsv1alpha1.ChannelTypeGitLabLabel ||
+		channel.Spec.Type == agentsv1alpha1.ChannelTypeGitLabComment {
 		ref := ""
-		if channel.Spec.GitLabLabel != nil {
+		switch {
+		case channel.Spec.GitLabLabel != nil:
 			ref = channel.Spec.GitLabLabel.IntegrationRef
+		case channel.Spec.GitLabComment != nil:
+			ref = channel.Spec.GitLabComment.IntegrationRef
 		}
 		if ref == "" {
-			r.setChannelFailedStatus(channel, "gitlabLabel.integrationRef is required for gitlab-label channels")
+			r.setChannelFailedStatus(channel, fmt.Sprintf("integrationRef is required for %s channels", channel.Spec.Type))
 			if patchErr := patchStatus(ctx, r.Client, channel, statusPatch); patchErr != nil {
 				return ctrl.Result{}, patchErr
 			}
@@ -127,7 +132,7 @@ func (r *ChannelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// 1. Deployment
-	deployment := resources.BuildChannelDeployment(channel, agent, integration)
+	deployment := resources.BuildChannelDeployment(channel, agent, integration, r.Infra)
 	if err := reconcileOwnedResource(ctx, r.Client, r.Scheme, channel, deployment); err != nil {
 		return ctrl.Result{}, err
 	}

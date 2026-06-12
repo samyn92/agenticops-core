@@ -18,6 +18,7 @@ package resources
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	agentsv1alpha1 "github.com/samyn92/agentops-core/api/v1alpha1"
@@ -97,6 +98,29 @@ func ResolveGitWorkspace(
 			cfg.BaseBranch = gl.DefaultBranch
 		}
 
+	case agentsv1alpha1.IntegrationKindGitLabGroup:
+		glg := resource.Spec.GitLabGroup
+		if glg == nil {
+			return nil, fmt.Errorf("integration %q kind is gitlab-group but spec.gitlabGroup is nil", resource.Name)
+		}
+		// A group binds many projects; the caller (e.g. a delegating manager)
+		// must name the specific project inside the group to clone.
+		if gitSpec.Project == "" {
+			return nil, fmt.Errorf("integration %q is a gitlab-group; spec.git.project (full project path, e.g. %q/<repo>) is required", resource.Name, glg.Group)
+		}
+		// Safety: the group token must only ever clone projects inside its group.
+		if !strings.HasPrefix(gitSpec.Project, glg.Group+"/") {
+			return nil, fmt.Errorf("project %q is not within gitlab-group %q", gitSpec.Project, glg.Group)
+		}
+		// Honour an explicit allow-list when the integration declares one.
+		if len(glg.Projects) > 0 && !slices.Contains(glg.Projects, gitSpec.Project) {
+			return nil, fmt.Errorf("project %q is not in the allow-list for gitlab-group %q", gitSpec.Project, resource.Name)
+		}
+		cfg.Provider = ProviderGitLab
+		cfg.CloneURL = fmt.Sprintf("%s/%s.git", glg.BaseURL, gitSpec.Project)
+		cfg.GitLabProject = gitSpec.Project
+		cfg.GitLabBaseURL = glg.BaseURL
+
 	case agentsv1alpha1.IntegrationKindGitRepo:
 		if resource.Spec.Git == nil {
 			return nil, fmt.Errorf("integration %q kind is git-repo but spec.git is nil", resource.Name)
@@ -143,6 +167,11 @@ func (g *GitWorkspaceConfig) GitEnvVars() []corev1.EnvVar {
 		env = append(env,
 			corev1.EnvVar{Name: "GIT_PROJECT", Value: g.GitLabProject},
 			corev1.EnvVar{Name: "GITLAB_URL", Value: g.GitLabBaseURL},
+			// Bind the runtime's native gitlab_* tools to the project being
+			// worked on so label/MR calls default to the right project (the
+			// tools read GITLAB_PROJECT). For a gitlab-group clone this is the
+			// specific project path inside the group.
+			corev1.EnvVar{Name: "GITLAB_PROJECT", Value: g.GitLabProject},
 		)
 	}
 

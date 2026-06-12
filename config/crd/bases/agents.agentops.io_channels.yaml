@@ -158,6 +158,40 @@ spec:
                 - events
                 - secret
                 type: object
+              gitlabComment:
+                description: |-
+                  GitLabComment poll-based planning trigger configuration.
+                  The operator renders a bridge that polls a bound GitLab Integration for
+                  issues carrying the planning label and prompts the (daemon) planner agent
+                  whenever a human leaves a comment the planner has not yet answered.
+                properties:
+                  integrationRef:
+                    description: |-
+                      IntegrationRef is the name of a bound gitlab-project / gitlab-group
+                      Integration (same namespace) supplying base URL, project, and token.
+                    minLength: 1
+                    type: string
+                  planningLabel:
+                    default: agent::planning
+                    description: |-
+                      PlanningLabel scopes which issues are watched for comments. Only issues
+                      carrying this label are inspected, so the bridge never polls the whole
+                      backlog's comment threads.
+                    type: string
+                  pollInterval:
+                    default: 30s
+                    description: PollInterval between GitLab API polls.
+                    type: string
+                  state:
+                    default: opened
+                    description: 'State filter: opened (default) or all.'
+                    enum:
+                    - opened
+                    - all
+                    type: string
+                required:
+                - integrationRef
+                type: object
               gitlabLabel:
                 description: |-
                   GitLabLabel poll-based work-board trigger configuration.
@@ -788,6 +822,7 @@ spec:
                 - github
                 - webhook
                 - gitlab-label
+                - gitlab-comment
                 type: string
                 x-kubernetes-validations:
                 - message: type is immutable
@@ -854,6 +889,8 @@ spec:
               rule: self.type != 'github' || has(self.github)
             - message: gitlabLabel config is required for type=gitlab-label
               rule: self.type != 'gitlab-label' || has(self.gitlabLabel)
+            - message: gitlabComment config is required for type=gitlab-comment
+              rule: self.type != 'gitlab-comment' || has(self.gitlabComment)
             - message: prompt template is required for event-type channels (gitlab,
                 github, webhook)
               rule: '!(self.type in [''gitlab'',''github'',''webhook'']) || (has(self.prompt)

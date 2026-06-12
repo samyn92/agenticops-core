@@ -322,7 +322,40 @@ type GitLabLabelChannelConfig struct {
 	PollInterval *metav1.Duration `json:"pollInterval,omitempty"`
 }
 
-// GitHubChannelConfig configures a GitHub webhook channel.
+// GitLabCommentChannelConfig configures the comment-driven planning channel.
+//
+// The operator resolves the bound gitlab-project / gitlab-group Integration for
+// base URL, project/group, and API token, then injects them into a poll-based
+// bridge. The bridge watches issues carrying PlanningLabel and prompts the
+// (daemon) planner agent whenever a human posts a comment the planner has not
+// yet answered, so the planner can refine the issue description (the PLAN) and
+// reply in the thread. Hand-off to implementation happens when the planner (or a
+// human) moves the issue off PlanningLabel onto a work-board trigger label.
+type GitLabCommentChannelConfig struct {
+	// IntegrationRef is the name of a bound gitlab-project / gitlab-group
+	// Integration (same namespace) supplying base URL, project, and token.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	IntegrationRef string `json:"integrationRef"`
+
+	// PlanningLabel scopes which issues are watched for comments. Only issues
+	// carrying this label are inspected, so the bridge never polls the whole
+	// backlog's comment threads.
+	// +optional
+	// +kubebuilder:default="agent::planning"
+	PlanningLabel string `json:"planningLabel,omitempty"`
+
+	// State filter: opened (default) or all.
+	// +optional
+	// +kubebuilder:validation:Enum=opened;all
+	// +kubebuilder:default=opened
+	State string `json:"state,omitempty"`
+
+	// PollInterval between GitLab API polls.
+	// +optional
+	// +kubebuilder:default="30s"
+	PollInterval *metav1.Duration `json:"pollInterval,omitempty"`
+}
 type GitHubChannelConfig struct {
 	// GitHub webhook events to listen for (e.g. "pull_request").
 	Events []string `json:"events"`

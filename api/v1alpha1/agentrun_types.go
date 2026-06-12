@@ -165,6 +165,13 @@ type AgentRunGitSpec struct {
 	// Base branch for the PR/MR target (e.g. "main"). Defaults to the repo's default branch.
 	// +optional
 	BaseBranch string `json:"baseBranch,omitempty"`
+
+	// Project is the full project path to clone when IntegrationRef points to a
+	// gitlab-group (e.g. "samyn92-lab/billing-svc"). Required for group refs so
+	// the runtime knows which project inside the group to check out; ignored for
+	// gitlab-project / github-repo / git-repo refs (those carry their own path).
+	// +optional
+	Project string `json:"project,omitempty"`
 }
 
 // AgentRunStatus defines the observed state of AgentRun.

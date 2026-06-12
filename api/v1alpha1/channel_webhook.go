@@ -97,12 +97,24 @@ func (r *Channel) validate() (admission.Warnings, error) {
 			allErrs = append(allErrs, field.Required(specPath.Child("gitlabLabel", "integrationRef"),
 				"integrationRef is required for type=gitlab-label"))
 		}
+	case ChannelTypeGitLabComment:
+		if r.Spec.GitLabComment == nil {
+			allErrs = append(allErrs, field.Required(specPath.Child("gitlabComment"),
+				"gitlabComment config is required for type=gitlab-comment"))
+		} else if r.Spec.GitLabComment.IntegrationRef == "" {
+			allErrs = append(allErrs, field.Required(specPath.Child("gitlabComment", "integrationRef"),
+				"integrationRef is required for type=gitlab-comment"))
+		}
 	}
 
-	// Event types require a prompt template, except gitlab-label: that is a
-	// structured work-board channel whose protocol prompt is supplied by the
-	// operator as a platform-owned default when spec.prompt is omitted.
-	if r.Spec.Type.IsEventType() && r.Spec.Type != ChannelTypeGitLabLabel && r.Spec.Prompt == "" {
+	// Event types require a prompt template, except gitlab-label and
+	// gitlab-comment: those are structured channels whose protocol prompt is
+	// supplied by the operator as a platform-owned default when spec.prompt is
+	// omitted.
+	if r.Spec.Type.IsEventType() &&
+		r.Spec.Type != ChannelTypeGitLabLabel &&
+		r.Spec.Type != ChannelTypeGitLabComment &&
+		r.Spec.Prompt == "" {
 		allErrs = append(allErrs, field.Required(specPath.Child("prompt"),
 			fmt.Sprintf("prompt template is required for event-type channel (%s)", r.Spec.Type)))
 	}

@@ -95,6 +95,13 @@ spec:
                       that provides the repository URL and credentials.
                     minLength: 1
                     type: string
+                  project:
+                    description: |-
+                      Project is the full project path to clone when IntegrationRef points to a
+                      gitlab-group (e.g. "samyn92-lab/billing-svc"). Required for group refs so
+                      the runtime knows which project inside the group to check out; ignored for
+                      gitlab-project / github-repo / git-repo refs (those carry their own path).
+                    type: string
                 required:
                 - branch
                 - integrationRef

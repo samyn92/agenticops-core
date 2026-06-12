@@ -267,6 +267,7 @@ func main() {
 	if err := (&controller.ChannelReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Infra:  resources.InfraConfig{OTelEndpoint: otelEndpoint, NATSURL: natsURL},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Channel")
 		os.Exit(1)
